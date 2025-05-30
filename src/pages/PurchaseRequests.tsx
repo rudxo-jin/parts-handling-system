@@ -315,8 +315,10 @@ const PurchaseRequests: React.FC = () => {
         switch (urlFilter) {
           case 'overdue':
             // 지연된 요청: 입고 예정일이 지났는데 완료되지 않은 요청 (종료된 프로세스 제외)
+            // 실제 입고일이 있으면 그 날짜를 기준으로, 없으면 현재 날짜를 기준으로 판단
+            const comparisonDate = request.warehouseReceiptAt || now;
             matchesFilter = !!(request.expectedDeliveryDate && 
-                           request.expectedDeliveryDate < now && 
+                           request.expectedDeliveryDate < comparisonDate && 
                            request.currentStatus !== 'branch_received_confirmed' &&
                            request.currentStatus !== 'process_terminated');
             break;
@@ -1539,7 +1541,7 @@ const PurchaseRequests: React.FC = () => {
                   size="small"
                 />
                 {selectedHistoryRequest.expectedDeliveryDate && 
-                 selectedHistoryRequest.expectedDeliveryDate < new Date() && 
+                 selectedHistoryRequest.expectedDeliveryDate < (selectedHistoryRequest.warehouseReceiptAt || new Date()) && 
                  selectedHistoryRequest.currentStatus !== 'branch_received_confirmed' && 
                  selectedHistoryRequest.currentStatus !== 'process_terminated' && (
                   <Chip 
@@ -1569,13 +1571,16 @@ const PurchaseRequests: React.FC = () => {
 
               {/* 지연 정보 표시 */}
               {selectedHistoryRequest.expectedDeliveryDate && 
-               selectedHistoryRequest.expectedDeliveryDate < new Date() && 
+               selectedHistoryRequest.expectedDeliveryDate < (selectedHistoryRequest.warehouseReceiptAt || new Date()) && 
                selectedHistoryRequest.currentStatus !== 'branch_received_confirmed' && 
                selectedHistoryRequest.currentStatus !== 'process_terminated' && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                   <Typography variant="body2">
                     <strong>입고 예정일 지연:</strong> {selectedHistoryRequest.expectedDeliveryDate.toLocaleDateString('ko-KR')} 예정이었으나 
-                    {Math.ceil((new Date().getTime() - selectedHistoryRequest.expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24))}일 지연됨
+                    {selectedHistoryRequest.warehouseReceiptAt ? 
+                      `${selectedHistoryRequest.warehouseReceiptAt.toLocaleDateString('ko-KR')}에 입고됨 (${Math.ceil((selectedHistoryRequest.warehouseReceiptAt.getTime() - selectedHistoryRequest.expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24))}일 지연)` :
+                      `${Math.ceil((new Date().getTime() - selectedHistoryRequest.expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24))}일 지연됨`
+                    }
                   </Typography>
                 </Alert>
               )}
@@ -1665,17 +1670,6 @@ const PurchaseRequests: React.FC = () => {
         <DialogActions>
           <Button onClick={handleHistoryClose}>
             닫기
-          </Button>
-          <Button 
-            variant="contained" 
-            onClick={() => {
-              handleHistoryClose();
-              if (selectedHistoryRequest) {
-                handleViewDetail(selectedHistoryRequest);
-              }
-            }}
-          >
-            상세 보기
           </Button>
         </DialogActions>
       </Dialog>

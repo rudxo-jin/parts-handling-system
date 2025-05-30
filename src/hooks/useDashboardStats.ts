@@ -107,6 +107,7 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
                 : null;
               const requestDate = data.requestDate ? safeToDate(data.requestDate) : null;
               const updatedAt = data.updatedAt ? safeToDate(data.updatedAt) : null;
+              const warehouseReceiptAt = data.warehouseReceiptAt ? safeToDate(data.warehouseReceiptAt) : null;
               
               // 기본 통계
               if (status === 'operations_submitted') {
@@ -145,8 +146,10 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
                   awaitingLogistics++;
                 }
 
-                // 지연된 요청들 (예상 배송일이 지난 것들, 종료된 프로세스 제외)
-                if (expectedDeliveryDate && expectedDeliveryDate < now && 
+                // 지연된 요청들 (입고 예정일이 지난 것들, 종료된 프로세스 제외)
+                // 실제 입고일이 있으면 그 날짜를 기준으로, 없으면 현재 날짜를 기준으로 판단
+                if (expectedDeliveryDate && 
+                    expectedDeliveryDate < (warehouseReceiptAt || now) && 
                     status !== 'branch_received_confirmed' && 
                     status !== 'process_terminated') {
                   overdue++;
