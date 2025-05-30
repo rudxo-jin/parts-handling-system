@@ -994,7 +994,7 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                     </TableHead>
                     <TableBody>
                       {request.statusHistory
-                        .sort((a, b) => (a.updatedAt?.getTime() || 0) - (b.updatedAt?.getTime() || 0))
+                        .sort((a, b) => (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0))
                         .map((history, index) => (
                         <TableRow key={index}>
                           <TableCell>{index + 1}</TableCell>
