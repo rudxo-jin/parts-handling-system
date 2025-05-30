@@ -52,7 +52,7 @@ const menuItems: MenuItemType[] = [
     text: '부품 관리',
     icon: <InventoryIcon />,
     path: '/parts',
-    roles: ['admin', 'operations', 'logistics']
+    roles: ['admin', 'operations']
   },
   {
     text: '신규 부품 등록 및 첫 구매 요청',
