@@ -1,0 +1,152 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { CssBaseline, Box } from '@mui/material';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Layout from './components/Layout/Layout';
+import LoginPage from './pages/LoginPage';
+import Dashboard from './pages/Dashboard';
+import PartsManagement from './pages/PartsManagement';
+import NewPartRequest from './pages/NewPartRequest';
+import MultiPartRequest from './pages/MultiPartRequest';
+import UserManagement from './pages/UserManagement';
+import BranchManagement from './pages/BranchManagement';
+import PurchaseRequests from './pages/PurchaseRequests';
+import NotificationTest from './pages/NotificationTest';
+import SimpleNotificationSettings from './components/SimpleNotificationSettings';
+import AdminTools from './pages/AdminTools';
+
+// Material-UI 테마 설정
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#1976d2',
+    },
+    secondary: {
+      main: '#dc004e',
+    },
+    background: {
+      default: '#f5f5f5',
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h4: {
+      fontWeight: 600,
+    },
+    h5: {
+      fontWeight: 500,
+    },
+  },
+  components: {
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          borderRadius: 8,
+        },
+      },
+    },
+  },
+});
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser } = useAuth();
+  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+};
+
+const AppRoutes: React.FC = () => {
+  const { currentUser } = useAuth();
+
+  if (!currentUser) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" />} />
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/parts" element={
+          <ProtectedRoute>
+            <PartsManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="/new-part-request" element={
+          <ProtectedRoute>
+            <NewPartRequest />
+          </ProtectedRoute>
+        } />
+        <Route path="/multi-part-request" element={
+          <ProtectedRoute>
+            <MultiPartRequest />
+          </ProtectedRoute>
+        } />
+        <Route path="/purchase-requests" element={
+          <ProtectedRoute>
+            <PurchaseRequests />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/users" element={
+          <ProtectedRoute>
+            <UserManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/branches" element={
+          <ProtectedRoute>
+            <BranchManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/tools" element={
+          <ProtectedRoute>
+            <AdminTools />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/notification-test" element={
+          <ProtectedRoute>
+            <NotificationTest />
+          </ProtectedRoute>
+        } />
+        <Route path="/settings/notifications" element={
+          <ProtectedRoute>
+            <SimpleNotificationSettings />
+          </ProtectedRoute>
+        } />
+        <Route path="*" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </Layout>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <Router>
+          <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+            <AppRoutes />
+          </Box>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
+  );
+};
+
+export default App;
