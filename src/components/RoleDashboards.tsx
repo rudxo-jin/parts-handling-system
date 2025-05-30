@@ -208,6 +208,9 @@ interface LogisticsDashboardProps {
   activeRequests: number;
   loading: boolean;
   userId?: string;
+  monthlyCompleted?: number;
+  monthlyDispatched?: number;
+  avgProcessingTime?: number;
 }
 
 export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
@@ -215,7 +218,10 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
   overdueRequests,
   activeRequests,
   loading,
-  userId
+  userId,
+  monthlyCompleted = 0,
+  monthlyDispatched = 0,
+  avgProcessingTime = 2.3
 }) => {
   const navigate = useNavigate();
 
@@ -282,29 +288,29 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
       )}
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-        {/* 📋 단계별 처리 현황 (구체적 숫자 + 바로가기) */}
-        <Box sx={{ flex: '1 1 500px', minWidth: 500 }}>
-          <Paper sx={{ p: 3, height: 400, borderRadius: 2 }}>
+        {/* 📋 단계별 처리 현황 */}
+        <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
+          <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
               📋 단계별 처리 현황
             </Typography>
             
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 2 }}>
               {/* 이카운트 등록 대기 */}
               <Box sx={{ p: 2, bgcolor: 'warning.50', borderRadius: 2, border: '1px solid', borderColor: 'warning.200' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1 }}>
                     <ScheduleIcon color="warning" />
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" noWrap>
                         이카운트 등록 대기
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         운영부 요청 완료 → 이카운트 등록 필요
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                     <Typography variant="h5" fontWeight="bold" color="warning.main">
                       {awaitingLogistics}건
                     </Typography>
@@ -322,19 +328,19 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
 
               {/* 발주 완료 → 입고 대기 */}
               <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: 2, border: '1px solid', borderColor: 'info.200' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1 }}>
                     <ShippingIcon color="info" />
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" noWrap>
                         발주 완료 → 입고 대기
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         구매처 발주 완료 → 실제 입고 확인 필요
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                     <Typography variant="h5" fontWeight="bold" color="info.main">
                       {Math.floor(activeRequests * 0.3)}건
                     </Typography>
@@ -352,19 +358,19 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
 
               {/* 창고 입고 → 출고 대기 */}
               <Box sx={{ p: 2, bgcolor: 'secondary.50', borderRadius: 2, border: '1px solid', borderColor: 'secondary.200' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1 }}>
                     <LocalShippingIcon color="secondary" />
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" noWrap>
                         창고 입고 → 출고 대기
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         물류창고 입고 완료 → 지점 출고 처리 필요
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                     <Typography variant="h5" fontWeight="bold" color="secondary.main">
                       {Math.floor(activeRequests * 0.4)}건
                     </Typography>
@@ -382,24 +388,24 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
 
               {/* 지점 출고 완료 */}
               <Box sx={{ p: 2, bgcolor: 'success.50', borderRadius: 2, border: '1px solid', borderColor: 'success.200' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1 }}>
                     <CheckCircleIcon color="success" />
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" noWrap>
                         지점 출고 완료
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         전체 지점 출고 완료 → 입고 확인 대기
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                     <Typography variant="h5" fontWeight="bold" color="success.main">
                       {Math.floor(activeRequests * 0.6)}건
                     </Typography>
                     <Button
-                      variant="outlined"
+                      variant="contained"
                       color="success"
                       size="small"
                       onClick={() => navigate('/purchase-requests?status=branch_dispatched')}
@@ -413,73 +419,39 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
           </Paper>
         </Box>
 
-        {/* 📊 오늘의 성과 요약 */}
-        <Box sx={{ flex: '1 1 300px', minWidth: 300 }}>
-          <Paper sx={{ p: 3, height: 400, borderRadius: 2 }}>
+        {/* 📊 이달의 성과 */}
+        <Box sx={{ flex: '1 1 400px', minWidth: 400 }}>
+          <Paper sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
-              📊 오늘의 성과
+              📊 이달의 성과
             </Typography>
             
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {/* 성과 지표 */}
               <Box>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
                   처리 완료
                 </Typography>
                 <Typography variant="h4" fontWeight="bold" color="primary.main">
-                  {Math.floor(activeRequests * 0.2)}건
+                  {monthlyCompleted}건
                 </Typography>
               </Box>
-
-              <Divider />
-
+              
               <Box>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
                   출고 완료
                 </Typography>
                 <Typography variant="h4" fontWeight="bold" color="success.main">
-                  {Math.floor(activeRequests * 0.3)}건
+                  {monthlyDispatched}건
                 </Typography>
               </Box>
-
-              <Divider />
-
+              
               <Box>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
                   평균 처리 시간
                 </Typography>
-                <Typography variant="h4" fontWeight="bold" color="info.main">
-                  2.3일
+                <Typography variant="h4" fontWeight="bold" color="warning.main">
+                  {avgProcessingTime}일
                 </Typography>
-              </Box>
-
-              <Divider />
-
-              {/* 빠른 액션 */}
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
-                  🚀 빠른 액션
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<AssignmentIcon />}
-                    fullWidth
-                    size="small"
-                    onClick={() => navigate('/purchase-requests')}
-                  >
-                    전체 요청 목록
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<TrendingUpIcon />}
-                    fullWidth
-                    size="small"
-                    onClick={() => navigate('/purchase-requests?view=analytics')}
-                  >
-                    처리 현황 분석
-                  </Button>
-                </Box>
               </Box>
             </Box>
           </Paper>

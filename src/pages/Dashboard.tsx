@@ -174,39 +174,6 @@ const Dashboard: React.FC = () => {
           </>
         )}
         
-        {/* 물류팀 전용 성과 지표 카드들 */}
-        {userProfile?.role === 'logistics' && (
-          <>
-            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-              <StatCard
-                title="오늘 처리 완료"
-                value={stats.todayCompleted || 0}
-                icon={<CheckCircleIcon />}
-                color="#2e7d32"
-                loading={stats.loading}
-              />
-            </Box>
-            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-              <StatCard
-                title="이번주 출고"
-                value={stats.weeklyDispatched || 0}
-                icon={<LocalShippingIcon />}
-                color="#1976d2"
-                loading={stats.loading}
-              />
-            </Box>
-            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-              <StatCard
-                title="평균 처리시간"
-                value={`${stats.avgProcessingTime || 2.3}일`}
-                icon={<ScheduleIcon />}
-                color="#ed6c02"
-                loading={stats.loading}
-              />
-            </Box>
-          </>
-        )}
-        
         {/* 역할별 추가 카드들 */}
         {userProfile?.role === 'operations' && (
           <>
@@ -314,6 +281,9 @@ const Dashboard: React.FC = () => {
               activeRequests={stats.activeRequests}
               loading={stats.loading}
               userId={currentUser?.uid}
+              monthlyCompleted={stats.todayCompleted || 0}
+              monthlyDispatched={stats.weeklyDispatched || 0}
+              avgProcessingTime={stats.avgProcessingTime || 2.3}
             />
           )}
 

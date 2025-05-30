@@ -86,15 +86,14 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
             let overdue = 0;
             
             // 물류팀 성과 지표
-            let todayCompleted = 0;
-            let weeklyDispatched = 0;
+            let monthlyCompleted = 0;
+            let monthlyDispatched = 0;
             let totalProcessingDays = 0;
             let completedRequestsCount = 0;
 
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const weekStart = new Date(today);
-            weekStart.setDate(today.getDate() - today.getDay()); // 이번 주 시작일
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); // 이번 달 시작일
             const recentRequests: PurchaseRequest[] = [];
 
             snapshot.docs.forEach(doc => {
@@ -157,15 +156,15 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
                   overdue++;
                 }
                 
-                // 오늘 처리 완료된 요청들 (상태가 변경된 날짜 기준)
-                if (updatedAt && updatedAt >= today && 
+                // 이달 처리 완료된 요청들 (상태가 변경된 날짜 기준)
+                if (updatedAt && updatedAt >= monthStart && 
                     ['po_completed', 'warehouse_received', 'branch_dispatched'].includes(status)) {
-                  todayCompleted++;
+                  monthlyCompleted++;
                 }
                 
-                // 이번주 출고 완료된 요청들
-                if (updatedAt && updatedAt >= weekStart && status === 'branch_dispatched') {
-                  weeklyDispatched++;
+                // 이달 출고 완료된 요청들
+                if (updatedAt && updatedAt >= monthStart && status === 'branch_dispatched') {
+                  monthlyDispatched++;
                 }
                 
                 // 완료된 요청들의 처리 시간 계산 (평균 처리시간용)
@@ -197,8 +196,8 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
               recentRequests,
               awaitingLogistics,
               overdueRequests: overdue,
-              todayCompleted,
-              weeklyDispatched,
+              todayCompleted: monthlyCompleted,
+              weeklyDispatched: monthlyDispatched,
               avgProcessingTime,
             }));
           },
