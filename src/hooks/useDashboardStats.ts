@@ -92,7 +92,6 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
             let completedRequestsCount = 0;
 
             const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); // 이번 달 시작일
             const recentRequests: PurchaseRequest[] = [];
 

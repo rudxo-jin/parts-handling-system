@@ -21,9 +21,7 @@ import {
   Refresh as RefreshIcon,
   Warning as WarningIcon,
   BarChart as ChartIcon,
-  CheckCircle as CheckCircleIcon,
-  LocalShipping as LocalShippingIcon,
-  Schedule as ScheduleIcon,
+  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboardStats } from '../hooks/useDashboardStats';
