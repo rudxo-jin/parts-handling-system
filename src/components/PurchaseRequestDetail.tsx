@@ -917,7 +917,9 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Typography variant="h6">
                 처리 히스토리
-                {request.expectedDeliveryDate && request.expectedDeliveryDate < new Date() && 
+                {request.expectedDeliveryDate && 
+                 !request.warehouseReceiptAt && // 입고 완료되지 않은 요청만
+                 request.expectedDeliveryDate < new Date() && 
                  request.currentStatus !== 'branch_received_confirmed' && 
                  request.currentStatus !== 'process_terminated' && (
                   <Chip 
@@ -931,7 +933,9 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
             </AccordionSummary>
             <AccordionDetails>
               {/* 지연 정보 표시 */}
-              {request.expectedDeliveryDate && request.expectedDeliveryDate < new Date() && 
+              {request.expectedDeliveryDate && 
+               !request.warehouseReceiptAt && // 입고 완료되지 않은 요청만
+               request.expectedDeliveryDate < new Date() && 
                request.currentStatus !== 'branch_received_confirmed' && 
                request.currentStatus !== 'process_terminated' && (
                 <Alert severity="warning" sx={{ mb: 2 }}>

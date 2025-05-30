@@ -148,10 +148,12 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
 
                 // 지연된 요청들 (입고 예정일이 지난 것들, 종료된 프로세스 제외)
                 // 실제 입고일이 있으면 그 날짜를 기준으로, 없으면 현재 날짜를 기준으로 판단
+                // 입고가 완료된 요청은 지연 대상에서 제외
                 if (expectedDeliveryDate && 
                     expectedDeliveryDate < (warehouseReceiptAt || now) && 
                     status !== 'branch_received_confirmed' && 
-                    status !== 'process_terminated') {
+                    status !== 'process_terminated' &&
+                    !warehouseReceiptAt) { // 입고 완료된 요청은 제외
                   overdue++;
                 }
                 
