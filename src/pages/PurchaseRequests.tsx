@@ -30,10 +30,8 @@ import {
   DialogContent,
   DialogActions,
   Checkbox,
-  Toolbar,
 } from '@mui/material';
 import {
-  Visibility as VisibilityIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
   ArrowUpward as ArrowUpwardIcon,
@@ -149,7 +147,6 @@ const PurchaseRequests: React.FC = () => {
   // 🆕 체크박스 선택 및 일괄 처리 상태
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const [bulkProcessOpen, setBulkProcessOpen] = useState(false);
-  const [bulkProcessLoading, setBulkProcessLoading] = useState(false);
 
   // 안전한 날짜 변환 함수
   const safeToDate = (timestamp: any): Date => {

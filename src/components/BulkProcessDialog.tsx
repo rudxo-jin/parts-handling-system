@@ -16,7 +16,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider,
   Checkbox,
 } from '@mui/material';
 import {
@@ -27,7 +26,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { doc, updateDoc, arrayUnion, Timestamp, writeBatch } from 'firebase/firestore';
+import { doc, arrayUnion, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { PurchaseRequest } from '../types';

@@ -17,10 +17,9 @@ import {
   TableRow,
   Paper,
   Chip,
-  LinearProgress,
-  Divider,
+  CircularProgress,
 } from '@mui/material';
-import { MultiPartRequest, PurchaseRequest } from '../types';
+import { PurchaseRequest } from '../types';
 import { getMultiPartItems, getMultiPartProgress } from '../services/multiPartService';
 
 interface MultiPartRequestDetailProps {
@@ -42,28 +41,24 @@ const MultiPartRequestDetail: React.FC<MultiPartRequestDetailProps> = ({
 
   useEffect(() => {
     if (open && setId) {
+      const loadSetDetails = async () => {
+        setLoading(true);
+        try {
+          const items = await getMultiPartItems(setId);
+          setParts(items);
+          
+          const progressData = await getMultiPartProgress(setId);
+          setProgress(progressData);
+        } catch (error) {
+          console.error('세트 정보 로딩 실패:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
       loadSetDetails();
     }
   }, [open, setId]);
-
-  const loadSetDetails = async () => {
-    if (!setId) return;
-
-    setLoading(true);
-    try {
-      const [partsData, progressData] = await Promise.all([
-        getMultiPartItems(setId),
-        getMultiPartProgress(setId)
-      ]);
-      
-      setParts(partsData);
-      setProgress(progressData);
-    } catch (error) {
-      console.error('세트 상세 정보 로드 실패:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -103,7 +98,7 @@ const MultiPartRequestDetail: React.FC<MultiPartRequestDetailProps> = ({
       <DialogContent>
         {loading ? (
           <Box sx={{ py: 4 }}>
-            <LinearProgress />
+            <CircularProgress />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
               세트 정보를 불러오는 중...
             </Typography>
@@ -125,7 +120,7 @@ const MultiPartRequestDetail: React.FC<MultiPartRequestDetailProps> = ({
                       ({progress.progressPercentage}%)
                     </Typography>
                   </Box>
-                  <LinearProgress 
+                  <CircularProgress 
                     variant="determinate" 
                     value={progress.progressPercentage} 
                     sx={{ height: 8, borderRadius: 4 }}

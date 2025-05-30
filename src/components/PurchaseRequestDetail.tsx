@@ -7,11 +7,6 @@ import {
   Button,
   Typography,
   Box,
-  Chip,
-  TextField,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Table,
   TableBody,
   TableCell,
@@ -19,23 +14,16 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Chip,
+  TextField,
   Alert,
   CircularProgress,
-  Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  IconButton,
-  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckCircleIcon,
-  Undo as UndoIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -100,9 +88,6 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
     receipt: false,
     history: false,
   });
-
-  // 지점별 편집 상태
-  const [editingBranches, setEditingBranches] = useState<{ [key: number]: boolean }>({});
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
