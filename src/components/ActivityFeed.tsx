@@ -200,11 +200,10 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                       </Box>
                     }
                     secondary={
-                      <Box>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <Typography variant="caption" color="text.secondary">
                           {activity.entityName} • {activity.userName} ({getRoleText(activity.userRole)})
                         </Typography>
-                        <br />
                         <Typography variant="caption" color="text.secondary">
                           {formatTimeAgo(activity.timestamp)}
                         </Typography>
@@ -213,13 +212,15 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                             <Typography 
                               variant="caption" 
                               sx={{ 
-                                display: 'block', 
-                                mt: 0.5, 
                                 fontStyle: 'italic',
-                                cursor: 'help'
+                                cursor: 'help',
+                                color: 'text.secondary'
                               }}
                             >
-                              상세 정보 보기...
+                              {activity.details.length > 50 
+                                ? `${activity.details.substring(0, 50)}...` 
+                                : activity.details
+                              }
                             </Typography>
                           </Tooltip>
                         )}

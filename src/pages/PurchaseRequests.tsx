@@ -1115,25 +1115,44 @@ const PurchaseRequests: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             💡 사용 안내
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {userProfile?.role === 'operations' && '• 귀하가 생성한 구매 요청들만 표시됩니다.'}
-            {userProfile?.role === 'logistics' && '• 물류팀에서 처리해야 할 구매 요청들과 완료된 출고 건들이 표시됩니다. (초록색: 완료, 주황색: 부분출고, 파란색: 운영부 요청 완료)'}
-            {userProfile?.role === 'admin' && '• 시스템의 모든 구매 요청을 확인할 수 있습니다.'}
-            <br />
-            • <strong>테이블 헤더를 클릭</strong>하면 해당 필드로 정렬할 수 있습니다. (요청 NO, 부품명, 총 수량, 진행 상태, 담당부서)
-            <br />
-            • <strong>운영부 요청 완료 건을 클릭</strong>하면 입고예정일과 예정수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
-            <br />
-            • <strong>구매처 발주 완료 건을 클릭</strong>하면 실제입고일과 실제입고수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
-            <br />
-            • <strong>물류창고 입고 완료 및 부분출고완료 건을 클릭</strong>하면 지점별 출고수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
-            <br />
-            • <strong>전체 지점 출고 완료 이후 상태의 행을 클릭</strong>하면 상세 정보가 확장되고, 빠른 액션 버튼으로 다음 단계를 처리할 수 있습니다.
-            <br />
-            • [👁️] 버튼을 클릭하면 요청의 상세 정보를 확인할 수 있습니다.
-            <br />
-            • 검색 기능과 필터를 사용하여 원하는 요청을 빠르게 찾을 수 있습니다.
-          </Typography>
+          <Box component="ul" sx={{ pl: 2, m: 0 }}>
+            {userProfile?.role === 'operations' && (
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                귀하가 생성한 구매 요청들만 표시됩니다.
+              </Typography>
+            )}
+            {userProfile?.role === 'logistics' && (
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                물류팀에서 처리해야 할 구매 요청들과 완료된 출고 건들이 표시됩니다. (초록색: 완료, 주황색: 부분출고, 파란색: 운영부 요청 완료)
+              </Typography>
+            )}
+            {userProfile?.role === 'admin' && (
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                시스템의 모든 구매 요청을 확인할 수 있습니다.
+              </Typography>
+            )}
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>테이블 헤더를 클릭</strong>하면 해당 필드로 정렬할 수 있습니다. (요청 NO, 부품명, 총 수량, 진행 상태, 담당부서)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>운영부 요청 완료 건을 클릭</strong>하면 입고예정일과 예정수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>구매처 발주 완료 건을 클릭</strong>하면 실제입고일과 실제입고수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>물류창고 입고 완료 및 부분출고완료 건을 클릭</strong>하면 지점별 출고수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>전체 지점 출고 완료 이후 상태의 행을 클릭</strong>하면 상세 정보가 확장되고, 빠른 액션 버튼으로 다음 단계를 처리할 수 있습니다.
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              [👁️] 버튼을 클릭하면 요청의 상세 정보를 확인할 수 있습니다.
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              검색 기능과 필터를 사용하여 원하는 요청을 빠르게 찾을 수 있습니다.
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
 

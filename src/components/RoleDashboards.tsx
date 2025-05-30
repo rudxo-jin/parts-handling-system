@@ -171,13 +171,17 @@ export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
               💡 팁
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-              • 긴급 요청은 우선 처리됩니다
-              <br />
-              • 부품 정보를 정확히 입력해주세요
-              <br />
-              • 지점별 수량을 미리 계획하세요
-            </Typography>
+            <Box component="ul" sx={{ pl: 2, m: 0 }}>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                긴급 요청은 우선 처리됩니다
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                부품 정보를 정확히 입력해주세요
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                지점별 수량을 미리 계획하세요
+              </Typography>
+            </Box>
           </Box>
         </Paper>
       </Box>
@@ -454,13 +458,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
               📊 시스템 요약
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-              • 총 사용자: {totalUsers}명
-              <br />
-              • 활성 지점: {totalBranches}개
-              <br />
-              • 시스템 가동률: {(100 - systemHealth.errorRate).toFixed(1)}%
-            </Typography>
+            <Box component="ul" sx={{ pl: 2, m: 0 }}>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                총 사용자: {totalUsers}명
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                활성 지점: {totalBranches}개
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', mb: 0.5 }}>
+                시스템 가동률: {(100 - systemHealth.errorRate).toFixed(1)}%
+              </Typography>
+            </Box>
           </Box>
         </Paper>
       </Box>
