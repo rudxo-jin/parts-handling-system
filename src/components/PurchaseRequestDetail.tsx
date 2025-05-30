@@ -86,7 +86,7 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
     warehouse: false,
     dispatch: false,
     receipt: false,
-    history: false,
+    history: true,
   });
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -915,14 +915,77 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
           {/* 처리 히스토리 섹션 */}
           <Accordion expanded={expandedSections.history} onChange={() => toggleSection('history')}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="h6">처리 히스토리</Typography>
+              <Typography variant="h6">
+                처리 히스토리
+                {request.expectedDeliveryDate && request.expectedDeliveryDate < new Date() && 
+                 request.currentStatus !== 'branch_received_confirmed' && 
+                 request.currentStatus !== 'process_terminated' && (
+                  <Chip 
+                    label="⚠️ 입고 예정일 지연" 
+                    color="error" 
+                    size="small" 
+                    sx={{ ml: 2 }}
+                  />
+                )}
+              </Typography>
             </AccordionSummary>
             <AccordionDetails>
+              {/* 지연 정보 표시 */}
+              {request.expectedDeliveryDate && request.expectedDeliveryDate < new Date() && 
+               request.currentStatus !== 'branch_received_confirmed' && 
+               request.currentStatus !== 'process_terminated' && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>입고 예정일 지연:</strong> {request.expectedDeliveryDate.toLocaleDateString('ko-KR')} 예정이었으나 
+                    {Math.ceil((new Date().getTime() - request.expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24))}일 지연됨
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    <strong>현재 상태:</strong> {getStatusLabel(request.currentStatus)}
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* 주요 일정 정보 */}
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                  📅 주요 일정 정보
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">요청일</Typography>
+                    <Typography variant="body2">{request.requestDate?.toLocaleDateString('ko-KR')}</Typography>
+                  </Box>
+                  {request.expectedDeliveryDate && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">입고 예정일</Typography>
+                      <Typography variant="body2" color={request.expectedDeliveryDate < new Date() ? 'error.main' : 'text.primary'}>
+                        {request.expectedDeliveryDate.toLocaleDateString('ko-KR')}
+                        {request.expectedDeliveryDate < new Date() && ' (지연)'}
+                      </Typography>
+                    </Box>
+                  )}
+                  {request.warehouseReceiptAt && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">실제 입고일</Typography>
+                      <Typography variant="body2">{request.warehouseReceiptAt.toLocaleDateString('ko-KR')}</Typography>
+                    </Box>
+                  )}
+                  {request.branchDispatchCompletedAt && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">출고 완료일</Typography>
+                      <Typography variant="body2">{request.branchDispatchCompletedAt.toLocaleDateString('ko-KR')}</Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 히스토리 테이블 */}
               {request.statusHistory && request.statusHistory.length > 0 ? (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
                       <TableRow>
+                        <TableCell>순서</TableCell>
                         <TableCell>상태</TableCell>
                         <TableCell>처리자</TableCell>
                         <TableCell>처리일시</TableCell>
@@ -930,8 +993,11 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {request.statusHistory.map((history, index) => (
+                      {request.statusHistory
+                        .sort((a, b) => (a.updatedAt?.getTime() || 0) - (b.updatedAt?.getTime() || 0))
+                        .map((history, index) => (
                         <TableRow key={index}>
+                          <TableCell>{index + 1}</TableCell>
                           <TableCell>
                             <Chip 
                               label={getStatusLabel(history.status)} 
@@ -941,7 +1007,13 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                           </TableCell>
                           <TableCell>{history.updatedByName}</TableCell>
                           <TableCell>
-                            {history.updatedAt?.toLocaleString('ko-KR')}
+                            {history.updatedAt?.toLocaleString('ko-KR', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </TableCell>
                           <TableCell>{history.comments}</TableCell>
                         </TableRow>

@@ -1231,10 +1231,13 @@ const PurchaseRequests: React.FC = () => {
               <strong>전체 지점 출고 완료 이후 상태의 행을 클릭</strong>하면 상세 정보가 확장되고, 빠른 액션 버튼으로 다음 단계를 처리할 수 있습니다.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              [👁️] 버튼을 클릭하면 요청의 상세 정보를 확인할 수 있습니다.
+              <strong>지연 요청 필터</strong>: 입고 예정일이 지났는데 아직 완료되지 않은 요청들을 표시합니다. (부분 출고 완료 상태도 포함)
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              검색 기능과 필터를 사용하여 원하는 요청을 빠르게 찾을 수 있습니다.
+              <strong>상세 정보의 히스토리 섹션</strong>에서 처리 과정과 지연 원인을 확인할 수 있습니다.
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              [👁️] 버튼을 클릭하면 요청의 상세 정보를 확인할 수 있습니다.
             </Typography>
           </Box>
         </CardContent>
