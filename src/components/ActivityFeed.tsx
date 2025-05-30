@@ -192,15 +192,15 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                   </ListItemIcon>
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                           {activity.action}
                         </Typography>
                         {getImportanceChip(activity.importance)}
-                      </Box>
+                      </span>
                     }
                     secondary={
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <Typography variant="caption" color="text.secondary">
                           {activity.entityName} • {activity.userName} ({getRoleText(activity.userRole)})
                         </Typography>
@@ -224,7 +224,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                             </Typography>
                           </Tooltip>
                         )}
-                      </Box>
+                      </span>
                     }
                   />
                 </ListItem>
