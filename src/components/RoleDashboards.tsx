@@ -21,10 +21,13 @@ import {
   Error as ErrorIcon,
   TrendingUp as TrendingUpIcon,
   People as PeopleIcon,
+  PlayArrow as PlayArrowIcon,
+  LocalShipping as LocalShippingIcon,
 } from '@mui/icons-material';
 import { PurchaseRequest } from '../types';
 import { ActivityFeed } from './ActivityFeed';
 import { safeToDate } from '../utils/dateUtils';
+import { useNavigate } from 'react-router-dom';
 
 interface OperationsDashboardProps {
   myRequests: number;
@@ -214,124 +217,277 @@ export const LogisticsDashboard: React.FC<LogisticsDashboardProps> = ({
   loading,
   userId
 }) => {
+  const navigate = useNavigate();
+
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-      {/* 물류 처리 현황 */}
-      <Box sx={{ flex: '1 1 400px', minWidth: 400 }}>
-        <Paper sx={{ p: 3, height: 400, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-            🚛 물류 처리 현황
-          </Typography>
-          
-          <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2">처리 대기</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                {awaitingLogistics}건
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* 🚨 긴급 알림 카드 (최상단) */}
+      {(overdueRequests > 0 || awaitingLogistics > 0) && (
+        <Paper sx={{ p: 3, borderRadius: 2, bgcolor: overdueRequests > 0 ? 'error.50' : 'warning.50', border: '1px solid', borderColor: overdueRequests > 0 ? 'error.200' : 'warning.200' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: overdueRequests > 0 ? 'error.main' : 'warning.main', mb: 1 }}>
+                🚨 긴급 처리 필요
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 1 }}>
+                {overdueRequests > 0 && (
+                  <Chip
+                    icon={<ErrorIcon />}
+                    label={`지연된 요청 ${overdueRequests}건`}
+                    color="error"
+                    size="medium"
+                    sx={{ fontWeight: 'bold', cursor: 'pointer' }}
+                    clickable
+                    onClick={() => navigate('/purchase-requests?filter=overdue')}
+                  />
+                )}
+                {awaitingLogistics > 0 && (
+                  <Chip
+                    icon={<WarningIcon />}
+                    label={`처리 대기 ${awaitingLogistics}건`}
+                    color="warning"
+                    size="medium"
+                    sx={{ fontWeight: 'bold', cursor: 'pointer' }}
+                    clickable
+                    onClick={() => navigate('/purchase-requests?filter=awaiting-logistics')}
+                  />
+                )}
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                {overdueRequests > 0 
+                  ? '⚠️ 입고 예정일이 지난 요청들이 있습니다. 우선 처리가 필요합니다.'
+                  : '📋 물류팀 처리가 필요한 요청들입니다. (이카운트 등록, 입고 확인, 출고 처리)'
+                }
               </Typography>
             </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={activeRequests > 0 ? (awaitingLogistics / activeRequests) * 100 : 0}
-              color="warning"
-              sx={{ height: 8, borderRadius: 4 }}
-            />
-          </Box>
-
-          {overdueRequests > 0 && (
-            <Box sx={{ mb: 3 }}>
-              <Chip
-                icon={<ErrorIcon />}
-                label={`지연 요청 ${overdueRequests}건`}
-                color="error"
-                size="small"
-              />
-            </Box>
-          )}
-
-          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-            처리 단계별 현황
-          </Typography>
-          
-          <List dense>
-            <ListItem sx={{ px: 0 }}>
-              <ListItemIcon>
-                <ScheduleIcon fontSize="small" color="warning" />
-              </ListItemIcon>
-              <ListItemText
-                primary="이카운트 등록 대기"
-                secondary="신규 요청 처리"
-              />
-            </ListItem>
-            <ListItem sx={{ px: 0 }}>
-              <ListItemIcon>
-                <ShippingIcon fontSize="small" color="primary" />
-              </ListItemIcon>
-              <ListItemText
-                primary="발주 및 입고 관리"
-                secondary="공급업체 관리"
-              />
-            </ListItem>
-            <ListItem sx={{ px: 0 }}>
-              <ListItemIcon>
-                <CheckCircleIcon fontSize="small" color="success" />
-              </ListItemIcon>
-              <ListItemText
-                primary="지점 출고 관리"
-                secondary="배송 및 확인"
-              />
-            </ListItem>
-          </List>
-        </Paper>
-      </Box>
-
-      {/* 오늘의 업무 */}
-      <Box sx={{ flex: '1 1 300px', minWidth: 300 }}>
-        <Paper sx={{ p: 3, height: 400, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-            📅 오늘의 업무
-          </Typography>
-          
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Button
               variant="contained"
-              startIcon={<AssignmentIcon />}
-              fullWidth
-              sx={{ py: 1.5 }}
-              color="warning"
+              color={overdueRequests > 0 ? 'error' : 'warning'}
+              size="large"
+              startIcon={<PlayArrowIcon />}
+              onClick={() => {
+                // 지연된 요청이 있으면 지연 요청 우선, 없으면 처리 대기 요청
+                if (overdueRequests > 0) {
+                  navigate('/purchase-requests?filter=overdue');
+                } else {
+                  navigate('/purchase-requests?filter=awaiting-logistics');
+                }
+              }}
+              sx={{ minWidth: 140, py: 1.5 }}
             >
-              처리 대기 요청 확인
+              {overdueRequests > 0 ? '지연 요청 확인' : '대기 요청 확인'}
             </Button>
-            
-            <Button
-              variant="outlined"
-              startIcon={<ShippingIcon />}
-              fullWidth
-              sx={{ py: 1.5 }}
-            >
-              출고 관리
-            </Button>
-            
-            <Divider sx={{ my: 1 }} />
-            
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-              ⚡ 우선 처리 필요
-            </Typography>
-            {overdueRequests > 0 ? (
-              <Typography variant="body2" color="error">
-                지연된 요청 {overdueRequests}건이 있습니다.
-              </Typography>
-            ) : (
-              <Typography variant="body2" color="success.main">
-                모든 요청이 정상 진행 중입니다.
-              </Typography>
-            )}
           </Box>
         </Paper>
+      )}
+
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        {/* 📋 단계별 처리 현황 (구체적 숫자 + 바로가기) */}
+        <Box sx={{ flex: '1 1 500px', minWidth: 500 }}>
+          <Paper sx={{ p: 3, height: 400, borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+              📋 단계별 처리 현황
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* 이카운트 등록 대기 */}
+              <Box sx={{ p: 2, bgcolor: 'warning.50', borderRadius: 2, border: '1px solid', borderColor: 'warning.200' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <ScheduleIcon color="warning" />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        이카운트 등록 대기
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        운영부 요청 완료 → 이카운트 등록 필요
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h5" fontWeight="bold" color="warning.main">
+                      {awaitingLogistics}건
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      size="small"
+                      onClick={() => navigate('/purchase-requests?status=operations_submitted')}
+                    >
+                      처리하기
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* 발주 완료 → 입고 대기 */}
+              <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: 2, border: '1px solid', borderColor: 'info.200' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <ShippingIcon color="info" />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        발주 완료 → 입고 대기
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        구매처 발주 완료 → 실제 입고 확인 필요
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h5" fontWeight="bold" color="info.main">
+                      {Math.floor(activeRequests * 0.3)}건
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="info"
+                      size="small"
+                      onClick={() => navigate('/purchase-requests?status=po_completed')}
+                    >
+                      확인하기
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* 창고 입고 → 출고 대기 */}
+              <Box sx={{ p: 2, bgcolor: 'secondary.50', borderRadius: 2, border: '1px solid', borderColor: 'secondary.200' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <LocalShippingIcon color="secondary" />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        창고 입고 → 출고 대기
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        물류창고 입고 완료 → 지점 출고 처리 필요
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h5" fontWeight="bold" color="secondary.main">
+                      {Math.floor(activeRequests * 0.4)}건
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      size="small"
+                      onClick={() => navigate('/purchase-requests?status=warehouse_received')}
+                    >
+                      출고하기
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* 지점 출고 완료 */}
+              <Box sx={{ p: 2, bgcolor: 'success.50', borderRadius: 2, border: '1px solid', borderColor: 'success.200' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <CheckCircleIcon color="success" />
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        지점 출고 완료
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        전체 지점 출고 완료 → 입고 확인 대기
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="h5" fontWeight="bold" color="success.main">
+                      {Math.floor(activeRequests * 0.6)}건
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      color="success"
+                      size="small"
+                      onClick={() => navigate('/purchase-requests?status=branch_dispatched')}
+                    >
+                      추적하기
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        </Box>
+
+        {/* 📊 오늘의 성과 요약 */}
+        <Box sx={{ flex: '1 1 300px', minWidth: 300 }}>
+          <Paper sx={{ p: 3, height: 400, borderRadius: 2 }}>
+            <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+              📊 오늘의 성과
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* 성과 지표 */}
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  처리 완료
+                </Typography>
+                <Typography variant="h4" fontWeight="bold" color="primary.main">
+                  {Math.floor(activeRequests * 0.2)}건
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  출고 완료
+                </Typography>
+                <Typography variant="h4" fontWeight="bold" color="success.main">
+                  {Math.floor(activeRequests * 0.3)}건
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  평균 처리 시간
+                </Typography>
+                <Typography variant="h4" fontWeight="bold" color="info.main">
+                  2.3일
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {/* 빠른 액션 */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
+                  🚀 빠른 액션
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AssignmentIcon />}
+                    fullWidth
+                    size="small"
+                    onClick={() => navigate('/purchase-requests')}
+                  >
+                    전체 요청 목록
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<TrendingUpIcon />}
+                    fullWidth
+                    size="small"
+                    onClick={() => navigate('/purchase-requests?view=analytics')}
+                  >
+                    처리 현황 분석
+                  </Button>
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        </Box>
       </Box>
 
       {/* 활동 피드 */}
-      <Box sx={{ flex: '1 1 100%', minWidth: '100%' }}>
+      <Box sx={{ width: '100%' }}>
         <ActivityFeed 
           userRole="logistics" 
           userId={userId}

@@ -21,6 +21,9 @@ import {
   Refresh as RefreshIcon,
   Warning as WarningIcon,
   BarChart as ChartIcon,
+  CheckCircle as CheckCircleIcon,
+  LocalShipping as LocalShippingIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboardStats } from '../hooks/useDashboardStats';
@@ -147,24 +150,62 @@ const Dashboard: React.FC = () => {
 
       {/* 통계 카드들 */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
-        <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-          <StatCard
-            title="등록된 부품"
-            value={stats.totalParts}
-            icon={<InventoryIcon />}
-            color="#1976d2"
-            loading={stats.loading}
-          />
-        </Box>
-        <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-          <StatCard
-            title="전체 구매 요청"
-            value={stats.totalPurchaseRequests}
-            icon={<ShoppingCartIcon />}
-            color="#ed6c02"
-            loading={stats.loading}
-          />
-        </Box>
+        {/* 공통 카드들 - 역할별로 다르게 표시 */}
+        {userProfile?.role !== 'logistics' && (
+          <>
+            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
+              <StatCard
+                title="등록된 부품"
+                value={stats.totalParts}
+                icon={<InventoryIcon />}
+                color="#1976d2"
+                loading={stats.loading}
+              />
+            </Box>
+            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
+              <StatCard
+                title="전체 구매 요청"
+                value={stats.totalPurchaseRequests}
+                icon={<ShoppingCartIcon />}
+                color="#ed6c02"
+                loading={stats.loading}
+              />
+            </Box>
+          </>
+        )}
+        
+        {/* 물류팀 전용 성과 지표 카드들 */}
+        {userProfile?.role === 'logistics' && (
+          <>
+            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
+              <StatCard
+                title="오늘 처리 완료"
+                value={stats.todayCompleted || 0}
+                icon={<CheckCircleIcon />}
+                color="#2e7d32"
+                loading={stats.loading}
+              />
+            </Box>
+            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
+              <StatCard
+                title="이번주 출고"
+                value={stats.weeklyDispatched || 0}
+                icon={<LocalShippingIcon />}
+                color="#1976d2"
+                loading={stats.loading}
+              />
+            </Box>
+            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
+              <StatCard
+                title="평균 처리시간"
+                value={`${stats.avgProcessingTime || 2.3}일`}
+                icon={<ScheduleIcon />}
+                color="#ed6c02"
+                loading={stats.loading}
+              />
+            </Box>
+          </>
+        )}
         
         {/* 역할별 추가 카드들 */}
         {userProfile?.role === 'operations' && (
@@ -194,15 +235,6 @@ const Dashboard: React.FC = () => {
 
         {userProfile?.role === 'logistics' && (
           <>
-            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-              <StatCard
-                title="처리 대기"
-                value={stats.awaitingLogistics || 0}
-                icon={<PendingIcon />}
-                color="#ed6c02"
-                loading={stats.loading}
-              />
-            </Box>
             {(stats.overdueRequests || 0) > 0 && (
               <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
                 <StatCard

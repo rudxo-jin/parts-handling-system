@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -106,6 +106,7 @@ const getNextAction = (status: string) => {
 const PurchaseRequests: React.FC = () => {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -113,6 +114,10 @@ const PurchaseRequests: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const requestsPerPage = 10;
+
+  // URL 파라미터 기반 필터링
+  const urlFilter = searchParams.get('filter');
+  const urlStatus = searchParams.get('status');
 
   // 확장된 행 상태
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -297,9 +302,44 @@ const PurchaseRequests: React.FC = () => {
         (request.requestId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (request.requestorName || '').toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesStatus = filterStatus === 'all' || request.currentStatus === filterStatus;
+      // URL 파라미터 기반 필터링
+      let matchesFilter = true;
+      
+      if (urlFilter) {
+        const now = new Date();
+        switch (urlFilter) {
+          case 'overdue':
+            // 지연된 요청: 입고 예정일이 지났는데 완료되지 않은 요청 (종료된 프로세스 제외)
+            matchesFilter = !!(request.expectedDeliveryDate && 
+                           request.expectedDeliveryDate < now && 
+                           request.currentStatus !== 'branch_received_confirmed' &&
+                           request.currentStatus !== 'process_terminated');
+            break;
+          case 'awaiting-logistics':
+            // 물류 처리 대기: 물류팀이 실제로 처리해야 할 단계의 요청만
+            matchesFilter = ['operations_submitted', 'po_completed', 'warehouse_received'].includes(request.currentStatus);
+            break;
+          case 'urgent':
+            // 긴급 요청 (완료되지 않은 것만)
+            matchesFilter = request.importance === 'urgent' && 
+                           request.currentStatus !== 'branch_received_confirmed' &&
+                           request.currentStatus !== 'process_terminated';
+            break;
+          default:
+            matchesFilter = true;
+        }
+      }
+      
+      // URL 상태 파라미터 기반 필터링
+      let matchesUrlStatus = true;
+      if (urlStatus) {
+        matchesUrlStatus = request.currentStatus === urlStatus;
+      }
+      
+      // 기존 상태 필터링 (URL 상태가 없을 때만 적용)
+      const matchesStatus = urlStatus ? true : (filterStatus === 'all' || request.currentStatus === filterStatus);
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesFilter && matchesUrlStatus && matchesStatus;
     } catch (filterError) {
       console.error('필터링 중 에러:', request.id, filterError);
       return false;
@@ -780,6 +820,50 @@ const PurchaseRequests: React.FC = () => {
                 📋 {selectedRequestIds.size}개 항목이 선택되었습니다. 
                 {canBulkProcess() ? ' 일괄 처리가 가능합니다.' : ' 같은 상태의 항목만 일괄 처리할 수 있습니다.'}
               </Typography>
+            </Box>
+          )}
+          
+          {/* 🆕 현재 적용된 필터 표시 */}
+          {(urlFilter || urlStatus) && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'warning.50', borderRadius: 1, border: '1px solid', borderColor: 'warning.200' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" fontWeight="bold" color="warning.main">
+                    🔍 필터 적용됨:
+                  </Typography>
+                  {urlFilter && (
+                    <Chip
+                      label={
+                        urlFilter === 'overdue' ? '지연된 요청' :
+                        urlFilter === 'awaiting-logistics' ? '처리 대기' :
+                        urlFilter === 'urgent' ? '긴급 요청' : urlFilter
+                      }
+                      color="warning"
+                      size="small"
+                      variant="outlined"
+                    />
+                  )}
+                  {urlStatus && (
+                    <Chip
+                      label={getStatusLabel(urlStatus)}
+                      color="info"
+                      size="small"
+                      variant="outlined"
+                    />
+                  )}
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  onClick={() => {
+                    setSearchParams({});
+                    setFilterStatus('all');
+                  }}
+                >
+                  전체 보기
+                </Button>
+              </Box>
             </Box>
           )}
         </CardContent>
