@@ -42,6 +42,7 @@ import {
   PlayArrow as PlayArrowIcon,
   Edit as EditIcon,
   PlaylistAddCheck as PlaylistAddCheckIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -152,6 +153,10 @@ const PurchaseRequests: React.FC = () => {
   // 🆕 체크박스 선택 및 일괄 처리 상태
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const [bulkProcessOpen, setBulkProcessOpen] = useState(false);
+
+  // 🆕 히스토리 다이얼로그 상태
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedHistoryRequest, setSelectedHistoryRequest] = useState<PurchaseRequest | null>(null);
 
   // 안전한 날짜 변환 함수
   const safeToDate = (timestamp: any): Date => {
@@ -729,6 +734,18 @@ const PurchaseRequests: React.FC = () => {
     setSelectedRequestIds(new Set());
   };
 
+  // 🆕 히스토리 다이얼로그 열기
+  const handleHistoryOpen = (request: PurchaseRequest) => {
+    setSelectedHistoryRequest(request);
+    setHistoryDialogOpen(true);
+  };
+
+  // 🆕 히스토리 다이얼로그 닫기
+  const handleHistoryClose = () => {
+    setHistoryDialogOpen(false);
+    setSelectedHistoryRequest(null);
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -994,12 +1011,21 @@ const PurchaseRequests: React.FC = () => {
                           )}
                         </Box>
                       </TableCell>
+                      <TableCell 
+                        sx={{ 
+                          fontWeight: 'bold', 
+                          width: 80,
+                          textAlign: 'center'
+                        }}
+                      >
+                        히스토리
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginatedRequests.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                           {searchTerm || filterStatus !== 'all' 
                             ? '검색 결과가 없습니다.' 
                             : '등록된 구매 요청이 없습니다.'
@@ -1108,6 +1134,20 @@ const PurchaseRequests: React.FC = () => {
                                   size="small"
                                 />
                               </TableCell>
+                              
+                              {/* 히스토리 */}
+                              <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleHistoryOpen(request)}
+                                  sx={{ 
+                                    color: 'primary.main',
+                                    '&:hover': { backgroundColor: 'primary.50' }
+                                  }}
+                                >
+                                  <HistoryIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
                             </TableRow>
                             
                             {/* 확장된 상세 정보 행 (빠른 입력 대상 상태 제외) */}
@@ -1119,7 +1159,7 @@ const PurchaseRequests: React.FC = () => {
                              request.currentStatus !== 'process_terminated' &&
                              request.currentStatus !== 'branch_received_confirmed' && (
                               <TableRow>
-                                <TableCell colSpan={7} sx={{ p: 0, border: 0 }}>
+                                <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
                                   <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                     <Box sx={{ p: 2, backgroundColor: 'grey.50' }}>
                                       <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1235,6 +1275,9 @@ const PurchaseRequests: React.FC = () => {
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               <strong>상세 정보의 히스토리 섹션</strong>에서 처리 과정과 지연 원인을 확인할 수 있습니다.
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>히스토리 아이콘 (📋)</strong>을 클릭하면 해당 요청의 처리 히스토리를 빠르게 확인할 수 있습니다.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               [👁️] 버튼을 클릭하면 요청의 상세 정보를 확인할 수 있습니다.
@@ -1480,6 +1523,162 @@ const PurchaseRequests: React.FC = () => {
         requests={filteredRequests.filter(req => selectedRequestIds.has(req.id))}
         onUpdate={handleDetailUpdate}
       />
+
+      {/* 🆕 히스토리 다이얼로그 */}
+      <Dialog open={historyDialogOpen} onClose={handleHistoryClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">
+              📋 처리 히스토리
+            </Typography>
+            {selectedHistoryRequest && (
+              <Box display="flex" gap={1}>
+                <Chip 
+                  label={getStatusLabel(selectedHistoryRequest.currentStatus)} 
+                  color={getStatusColor(selectedHistoryRequest.currentStatus) as any}
+                  size="small"
+                />
+                {selectedHistoryRequest.expectedDeliveryDate && 
+                 selectedHistoryRequest.expectedDeliveryDate < new Date() && 
+                 selectedHistoryRequest.currentStatus !== 'branch_received_confirmed' && 
+                 selectedHistoryRequest.currentStatus !== 'process_terminated' && (
+                  <Chip 
+                    label="⚠️ 지연" 
+                    color="error" 
+                    size="small"
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedHistoryRequest && (
+            <>
+              {/* 부품 기본 정보 */}
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                  {selectedHistoryRequest.requestedPartName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  부품번호: {selectedHistoryRequest.requestedPartNumber} | 
+                  총 수량: {selectedHistoryRequest.totalRequestedQuantity?.toLocaleString() || 0}개 | 
+                  요청자: {selectedHistoryRequest.requestorName}
+                </Typography>
+              </Box>
+
+              {/* 지연 정보 표시 */}
+              {selectedHistoryRequest.expectedDeliveryDate && 
+               selectedHistoryRequest.expectedDeliveryDate < new Date() && 
+               selectedHistoryRequest.currentStatus !== 'branch_received_confirmed' && 
+               selectedHistoryRequest.currentStatus !== 'process_terminated' && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>입고 예정일 지연:</strong> {selectedHistoryRequest.expectedDeliveryDate.toLocaleDateString('ko-KR')} 예정이었으나 
+                    {Math.ceil((new Date().getTime() - selectedHistoryRequest.expectedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24))}일 지연됨
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* 주요 일정 정보 */}
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'info.50', borderRadius: 1 }}>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                  📅 주요 일정 정보
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">요청일</Typography>
+                    <Typography variant="body2">{selectedHistoryRequest.requestDate?.toLocaleDateString('ko-KR')}</Typography>
+                  </Box>
+                  {selectedHistoryRequest.expectedDeliveryDate && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">입고 예정일</Typography>
+                      <Typography variant="body2" color={selectedHistoryRequest.expectedDeliveryDate < new Date() ? 'error.main' : 'text.primary'}>
+                        {selectedHistoryRequest.expectedDeliveryDate.toLocaleDateString('ko-KR')}
+                        {selectedHistoryRequest.expectedDeliveryDate < new Date() && ' (지연)'}
+                      </Typography>
+                    </Box>
+                  )}
+                  {selectedHistoryRequest.warehouseReceiptAt && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">실제 입고일</Typography>
+                      <Typography variant="body2">{selectedHistoryRequest.warehouseReceiptAt.toLocaleDateString('ko-KR')}</Typography>
+                    </Box>
+                  )}
+                  {selectedHistoryRequest.branchDispatchCompletedAt && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">출고 완료일</Typography>
+                      <Typography variant="body2">{selectedHistoryRequest.branchDispatchCompletedAt.toLocaleDateString('ko-KR')}</Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 히스토리 테이블 */}
+              {selectedHistoryRequest.statusHistory && selectedHistoryRequest.statusHistory.length > 0 ? (
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>순서</TableCell>
+                        <TableCell>상태</TableCell>
+                        <TableCell>처리자</TableCell>
+                        <TableCell>처리일시</TableCell>
+                        <TableCell>코멘트</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selectedHistoryRequest.statusHistory
+                        .sort((a, b) => (a.updatedAt?.getTime() || 0) - (b.updatedAt?.getTime() || 0))
+                        .map((history, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={getStatusLabel(history.status)} 
+                              color={getStatusColor(history.status) as any}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>{history.updatedByName}</TableCell>
+                          <TableCell>
+                            {history.updatedAt?.toLocaleString('ko-KR', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </TableCell>
+                          <TableCell>{history.comments}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Typography color="textSecondary">처리 히스토리가 없습니다.</Typography>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleHistoryClose}>
+            닫기
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={() => {
+              handleHistoryClose();
+              if (selectedHistoryRequest) {
+                handleViewDetail(selectedHistoryRequest);
+              }
+            }}
+          >
+            상세 보기
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
