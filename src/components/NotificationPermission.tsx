@@ -117,16 +117,14 @@ const NotificationPermission: React.FC = () => {
             </Button>
           }
         >
-          <Typography variant="body2">
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                실시간 알림 받기
-              </Typography>
-              <Typography variant="body2">
-                중요한 구매 요청과 업무 알림을 놓치지 마세요!
-              </Typography>
-            </Box>
-          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+              실시간 알림 받기
+            </Typography>
+            <Typography variant="body2">
+              중요한 구매 요청과 업무 알림을 놓치지 마세요!
+            </Typography>
+          </Box>
         </Alert>
       )}
 
