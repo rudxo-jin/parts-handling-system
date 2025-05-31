@@ -30,6 +30,8 @@ import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { createMultiPartRequest, createIndividualPartsRequest } from '../services/multiPartService';
 import { Branch, BranchRequirement } from '../types';
+import ItemGroupAutocomplete from '../components/ItemGroupAutocomplete';
+import { recordMultipleItemGroupUsage, clearAllItemGroupData } from '../services/itemGroupService';
 
 interface PartFormData {
   partNumber: string;
@@ -242,7 +244,7 @@ const MultiPartRequest: React.FC = () => {
           setDescription,
           requestorUid: currentUser.uid,
           requestorName: currentUser.displayName || currentUser.email || '',
-          importance,
+          importance: 'medium' as const,
           notes
         };
 
@@ -260,6 +262,15 @@ const MultiPartRequest: React.FC = () => {
 
         const result = await createMultiPartRequest(setData, partsData);
         
+        // 품목그룹 사용 기록 저장
+        for (const part of parts) {
+          await recordMultipleItemGroupUsage(
+            part.itemGroup1,
+            part.itemGroup2,
+            part.itemGroup3
+          );
+        }
+        
         setError('');
         alert(`세트 요청이 성공적으로 등록되었습니다. (세트 ID: ${result.setId})`);
         navigate('/purchase-requests');
@@ -276,7 +287,7 @@ const MultiPartRequest: React.FC = () => {
           branchRequirements: part.branchRequirements.filter(req => Number(req.requestedQuantity) > 0),
           logisticsStockQuantity: part.logisticsStockQuantity,
           importance: 'medium' as const,
-          notes: undefined
+          notes: notes || ''
         }));
 
         await createIndividualPartsRequest(
@@ -284,6 +295,15 @@ const MultiPartRequest: React.FC = () => {
           currentUser.uid,
           currentUser.displayName || currentUser.email || ''
         );
+        
+        // 품목그룹 사용 기록 저장
+        for (const part of parts) {
+          await recordMultipleItemGroupUsage(
+            part.itemGroup1,
+            part.itemGroup2,
+            part.itemGroup3
+          );
+        }
         
         setError('');
         alert(`${parts.length}개의 부품 요청이 성공적으로 등록되었습니다.`);
@@ -310,13 +330,28 @@ const MultiPartRequest: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
           다중 부품 요청 등록
         </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/purchase-requests')}
-        >
-          목록으로
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={async () => {
+              if (window.confirm('모든 품목그룹 데이터를 삭제하시겠습니까?')) {
+                await clearAllItemGroupData();
+                alert('품목그룹 데이터가 삭제되었습니다. 페이지를 새로고침하세요.');
+              }
+            }}
+          >
+            품목그룹 데이터 삭제
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/purchase-requests')}
+          >
+            목록으로
+          </Button>
+        </Box>
       </Box>
 
       {/* 등록 모드 선택 */}
@@ -366,37 +401,23 @@ const MultiPartRequest: React.FC = () => {
               </Typography>
               
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <TextField
-                    label="세트명"
-                    value={setName}
-                    onChange={(e) => setSetName(e.target.value)}
-                    placeholder="예: 에어컨 수리 세트"
-                    required
-                    sx={{ flex: 1, minWidth: 250 }}
-                  />
-                  <FormControl sx={{ flex: 1, minWidth: 200 }}>
-                    <InputLabel>중요도</InputLabel>
-                    <Select
-                      value={importance}
-                      onChange={(e) => setImportance(e.target.value as any)}
-                      label="중요도"
-                    >
-                      <MenuItem value="low">낮음</MenuItem>
-                      <MenuItem value="medium">보통</MenuItem>
-                      <MenuItem value="high">높음</MenuItem>
-                      <MenuItem value="urgent">긴급</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Box>
+                <TextField
+                  label="세트명"
+                  value={setName}
+                  onChange={(e) => setSetName(e.target.value)}
+                  placeholder="예: 에어컨 수리 세트"
+                  required
+                  fullWidth
+                />
                 <TextField
                   fullWidth
                   label="세트 설명"
                   value={setDescription}
                   onChange={(e) => setSetDescription(e.target.value)}
                   multiline
-                  rows={2}
-                  placeholder="세트에 대한 설명을 입력하세요"
+                  rows={3}
+                  placeholder="이 세트에 포함된 부품들의 용도나 특징을 설명해주세요. 이 정보는 세트 상세보기와 히스토리에서 확인할 수 있습니다."
+                  helperText="세트의 목적과 구성 부품들의 관계를 설명하면 물류팀에서 처리할 때 도움이 됩니다."
                 />
               </Box>
             </CardContent>
@@ -457,53 +478,69 @@ const MultiPartRequest: React.FC = () => {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* 부품 정보 - 한 줄로 표기 */}
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* 부품 기본 정보 - 첫 번째 행 (3열 균등 분할) */}
+                    <Box sx={{ display: 'flex', gap: 2 }}>
                       <TextField
-                        label="부품번호"
+                        fullWidth
+                        label="품번"
                         value={part.partNumber}
                         onChange={(e) => updatePart(partIndex, 'partNumber', e.target.value)}
                         required
                         size="small"
-                        sx={{ width: 140 }}
+                        placeholder="예: BP-2024-001"
                       />
                       <TextField
-                        label="부품명"
+                        fullWidth
+                        label="품명"
                         value={part.partName}
                         onChange={(e) => updatePart(partIndex, 'partName', e.target.value)}
                         required
                         size="small"
-                        sx={{ width: 250 }}
+                        placeholder="예: 브레이크 패드"
                       />
                       <TextField
+                        fullWidth
                         label="판매가"
                         type="number"
                         value={part.price}
                         onChange={(e) => updatePart(partIndex, 'price', e.target.value ? Number(e.target.value) : '')}
                         size="small"
-                        InputProps={{ inputProps: { min: 0 } }}
-                        sx={{ width: 120 }}
+                        InputProps={{ 
+                          inputProps: { min: 0 },
+                          endAdornment: '원'
+                        }}
+                        placeholder="0"
                       />
-                      <TextField
-                        label="품목그룹1"
+                    </Box>
+
+                    {/* 품목그룹 - 두 번째 행 (3열 균등 분할) */}
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <ItemGroupAutocomplete
+                        groupLevel={1}
                         value={part.itemGroup1}
-                        onChange={(e) => updatePart(partIndex, 'itemGroup1', e.target.value)}
-                        size="small"
-                        sx={{ width: 140 }}
+                        onChange={(value) => updatePart(partIndex, 'itemGroup1', value)}
+                        textFieldProps={{
+                          fullWidth: true,
+                          size: 'small'
+                        }}
                       />
-                      <TextField
-                        label="품목그룹2"
+                      <ItemGroupAutocomplete
+                        groupLevel={2}
                         value={part.itemGroup2}
-                        onChange={(e) => updatePart(partIndex, 'itemGroup2', e.target.value)}
-                        size="small"
-                        sx={{ width: 140 }}
+                        onChange={(value) => updatePart(partIndex, 'itemGroup2', value)}
+                        textFieldProps={{
+                          fullWidth: true,
+                          size: 'small'
+                        }}
                       />
-                      <TextField
-                        label="품목그룹3"
+                      <ItemGroupAutocomplete
+                        groupLevel={3}
                         value={part.itemGroup3}
-                        onChange={(e) => updatePart(partIndex, 'itemGroup3', e.target.value)}
-                        size="small"
-                        sx={{ width: 140 }}
+                        onChange={(value) => updatePart(partIndex, 'itemGroup3', value)}
+                        textFieldProps={{
+                          fullWidth: true,
+                          size: 'small'
+                        }}
                       />
                     </Box>
 
@@ -532,35 +569,47 @@ const MultiPartRequest: React.FC = () => {
                       </Typography>
                     </Box>
 
-                    {/* 수량 설정 - 한 줄로 표기 */}
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2, p: 1, bgcolor: 'primary.50', borderRadius: 1, border: '1px solid', borderColor: 'primary.200' }}>
-                        <Typography variant="caption" color="primary.main" fontWeight="medium">
-                          물류재고:
-                        </Typography>
-                        <TextField
-                          type="number"
-                          value={part.logisticsStockQuantity}
-                          onChange={(e) => updatePart(partIndex, 'logisticsStockQuantity', Number(e.target.value))}
-                          size="small"
-                          InputProps={{ inputProps: { min: 0 } }}
-                          sx={{ width: 80 }}
-                          variant="outlined"
-                        />
+                    {/* 수량 설정 - 물류재고와 지점재고를 같은 행에 배치 */}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                        {/* 물류재고 */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'primary.50', borderRadius: 1, border: '1px solid', borderColor: 'primary.200', width: 'fit-content' }}>
+                          <Typography variant="caption" color="primary.main" fontWeight="medium">
+                            물류재고:
+                          </Typography>
+                          <TextField
+                            type="number"
+                            value={part.logisticsStockQuantity}
+                            onChange={(e) => updatePart(partIndex, 'logisticsStockQuantity', Number(e.target.value))}
+                            size="small"
+                            InputProps={{ inputProps: { min: 0 } }}
+                            sx={{ width: 80 }}
+                            variant="outlined"
+                          />
+                        </Box>
+                        
+                        {/* 지점별 수량 - 2행 그리드 */}
+                        <Box sx={{ 
+                          display: 'grid', 
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', 
+                          gap: 1,
+                          flex: 1,
+                          maxWidth: 'calc(100% - 180px)'
+                        }}>
+                          {branches.map((branch) => (
+                            <TextField
+                              key={branch.id}
+                              label={branch.branchName}
+                              type="number"
+                              value={part.branchRequirements.find(req => req.branchId === branch.id)?.requestedQuantity || 0}
+                              onChange={(e) => updateBranchRequirement(partIndex, branch.id, Number(e.target.value))}
+                              size="small"
+                              InputProps={{ inputProps: { min: 0 } }}
+                              sx={{ width: '100%', minWidth: 130 }}
+                            />
+                          ))}
+                        </Box>
                       </Box>
-                      
-                      {branches.map((branch) => (
-                        <TextField
-                          key={branch.id}
-                          label={branch.branchName}
-                          type="number"
-                          value={part.branchRequirements.find(req => req.branchId === branch.id)?.requestedQuantity || 0}
-                          onChange={(e) => updateBranchRequirement(partIndex, branch.id, Number(e.target.value))}
-                          size="small"
-                          InputProps={{ inputProps: { min: 0 } }}
-                          sx={{ width: 100 }}
-                        />
-                      ))}
                     </Box>
                   </Box>
                 </AccordionDetails>

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { db } from '../firebase';
 import { UserRole } from '../types';
 
 // 월별 구매 요청 트렌드 데이터
@@ -42,12 +44,48 @@ export interface StatusDistributionData {
   label: string;
 }
 
+// 새로운 데이터 타입들
+export interface SupplierPerformanceData {
+  supplierName: string;
+  onTimeDeliveryRate: number;
+  qualityScore: number;
+  avgDeliveryDays: number;
+  totalOrders: number;
+}
+
+export interface QuantityAccuracyData {
+  month: string;
+  requestedQuantity: number;
+  actualQuantity: number;
+  accuracyRate: number;
+}
+
+export interface SystemActivityData {
+  hour: string;
+  operations: number;
+  logistics: number;
+  admin: number;
+  totalActions: number;
+}
+
+export interface BottleneckData {
+  stage: string;
+  avgWaitTime: number;
+  maxWaitTime: number;
+  bottleneckScore: number;
+}
+
 interface ChartDataState {
   monthlyTrend: MonthlyTrendData[];
   categoryDistribution: CategoryDistributionData[];
   processingTime: ProcessingTimeData[];
   branchRequests: BranchRequestData[];
   statusDistribution: StatusDistributionData[];
+  // 새로운 데이터들
+  supplierPerformance: SupplierPerformanceData[];
+  quantityAccuracy: QuantityAccuracyData[];
+  systemActivity: SystemActivityData[];
+  bottleneckAnalysis: BottleneckData[];
   loading: boolean;
   error: string | null;
 }
@@ -59,6 +97,10 @@ export const useChartData = (userRole: UserRole | undefined) => {
     processingTime: [],
     branchRequests: [],
     statusDistribution: [],
+    supplierPerformance: [],
+    quantityAccuracy: [],
+    systemActivity: [],
+    bottleneckAnalysis: [],
     loading: true,
     error: null,
   });
@@ -66,177 +108,325 @@ export const useChartData = (userRole: UserRole | undefined) => {
   useEffect(() => {
     if (!userRole) return;
 
-    const generateMockChartData = (): ChartDataState => {
-      // 월별 트렌드 데이터 (최근 6개월)
-      const monthlyTrend: MonthlyTrendData[] = [];
-      const months = ['1월', '2월', '3월', '4월', '5월', '6월'];
-      
-      months.forEach((month, index) => {
-        const requests = Math.floor(Math.random() * 50) + 20;
-        const completed = Math.floor(requests * (0.6 + Math.random() * 0.3));
-        const pending = requests - completed;
-        
-        monthlyTrend.push({
-          month,
-          requests,
-          completed,
-          pending,
-        });
-      });
-
-      // 부품 카테고리별 분포
-      const categories = [
-        { name: '전자부품', color: '#1976d2' },
-        { name: '기계부품', color: '#ed6c02' },
-        { name: '소모품', color: '#2e7d32' },
-        { name: '안전용품', color: '#9c27b0' },
-        { name: '기타', color: '#d32f2f' },
-      ];
-
-      const categoryDistribution: CategoryDistributionData[] = categories.map(cat => {
-        const count = Math.floor(Math.random() * 100) + 10;
-        return {
-          category: cat.name,
-          count,
-          percentage: 0, // 나중에 계산
-          color: cat.color,
-        };
-      });
-
-      // 퍼센티지 계산
-      const totalCount = categoryDistribution.reduce((sum, item) => sum + item.count, 0);
-      categoryDistribution.forEach(item => {
-        item.percentage = Math.round((item.count / totalCount) * 100);
-      });
-
-      // 처리 시간 분석
-      const processingTime: ProcessingTimeData[] = [
-        {
-          stage: '요청 접수',
-          averageDays: 1,
-          minDays: 0,
-          maxDays: 3,
-        },
-        {
-          stage: '이카운트 등록',
-          averageDays: 2,
-          minDays: 1,
-          maxDays: 5,
-        },
-        {
-          stage: '발주 처리',
-          averageDays: 3,
-          minDays: 1,
-          maxDays: 7,
-        },
-        {
-          stage: '입고 대기',
-          averageDays: 7,
-          minDays: 3,
-          maxDays: 14,
-        },
-        {
-          stage: '지점 출고',
-          averageDays: 2,
-          minDays: 1,
-          maxDays: 5,
-        },
-      ];
-
-      // 지점별 요청 현황
-      const branchNames = ['강남점', '홍대점', '잠실점', '신촌점', '명동점'];
-      const branchRequests: BranchRequestData[] = branchNames.map(name => {
-        const totalRequests = Math.floor(Math.random() * 30) + 10;
-        const completedRequests = Math.floor(totalRequests * (0.5 + Math.random() * 0.4));
-        const pendingRequests = totalRequests - completedRequests;
-        const completionRate = Math.round((completedRequests / totalRequests) * 100);
-
-        return {
-          branchName: name,
-          totalRequests,
-          completedRequests,
-          pendingRequests,
-          completionRate,
-        };
-      });
-
-      // 상태별 분포
-      const statusDistribution: StatusDistributionData[] = [
-        {
-          status: 'operations_submitted',
-          count: Math.floor(Math.random() * 20) + 5,
-          color: '#ed6c02',
-          label: '요청 완료',
-        },
-        {
-          status: 'ecount_registered',
-          count: Math.floor(Math.random() * 15) + 3,
-          color: '#1976d2',
-          label: '이카운트 등록',
-        },
-        {
-          status: 'po_completed',
-          count: Math.floor(Math.random() * 25) + 8,
-          color: '#9c27b0',
-          label: '발주 완료',
-        },
-        {
-          status: 'warehouse_received',
-          count: Math.floor(Math.random() * 18) + 5,
-          color: '#2e7d32',
-          label: '입고 완료',
-        },
-        {
-          status: 'branch_dispatched',
-          count: Math.floor(Math.random() * 12) + 3,
-          color: '#388e3c',
-          label: '출고 완료',
-        },
-        {
-          status: 'branch_received_confirmed',
-          count: Math.floor(Math.random() * 30) + 15,
-          color: '#4caf50',
-          label: '입고 확인',
-        },
-      ];
-
-      return {
-        monthlyTrend,
-        categoryDistribution,
-        processingTime,
-        branchRequests,
-        statusDistribution,
-        loading: false,
-        error: null,
-      };
-    };
-
-    // 초기 데이터 로드
-    const loadData = () => {
+    const fetchChartData = async (): Promise<ChartDataState> => {
       try {
-        setData(generateMockChartData());
+        // Firebase에서 구매 요청 데이터 가져오기
+        const purchaseRequestsQuery = query(
+          collection(db, 'purchaseRequests'),
+          orderBy('createdAt', 'desc')
+        );
+        const purchaseRequestsSnapshot = await getDocs(purchaseRequestsQuery);
+        const purchaseRequests = purchaseRequestsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // 지점 데이터 가져오기
+        const branchesQuery = query(
+          collection(db, 'branches'),
+          where('isActive', '==', true)
+        );
+        const branchesSnapshot = await getDocs(branchesQuery);
+        const branches = branchesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // 월별 트렌드 데이터 계산
+        const monthlyTrend = calculateMonthlyTrend(purchaseRequests);
+
+        // 부품 카테고리별 분포 계산
+        const categoryDistribution = calculateCategoryDistribution(purchaseRequests);
+
+        // 처리 시간 분석 (요청접수 제외)
+        const processingTime = calculateProcessingTime(purchaseRequests);
+
+        // 지점별 요청 현황
+        const branchRequests = calculateBranchRequests(purchaseRequests, branches);
+
+        // 상태별 분포
+        const statusDistribution = calculateStatusDistribution(purchaseRequests);
+
+        // 공급업체 성과 분석 (실제 데이터가 없으므로 빈 배열)
+        const supplierPerformance: SupplierPerformanceData[] = [];
+
+        // 수량 정확도 분석
+        const quantityAccuracy = calculateQuantityAccuracy(purchaseRequests);
+
+        // 시스템 활성도 (실제 로그 데이터가 없으므로 빈 배열)
+        const systemActivity: SystemActivityData[] = [];
+
+        // 프로세스 병목 분석
+        const bottleneckAnalysis = calculateBottleneckAnalysis(purchaseRequests);
+
+        return {
+          monthlyTrend,
+          categoryDistribution,
+          processingTime,
+          branchRequests,
+          statusDistribution,
+          supplierPerformance,
+          quantityAccuracy,
+          systemActivity,
+          bottleneckAnalysis,
+          loading: false,
+          error: null,
+        };
       } catch (error) {
-        setData(prev => ({
-          ...prev,
+        console.error('차트 데이터 로딩 실패:', error);
+        return {
+          monthlyTrend: [],
+          categoryDistribution: [],
+          processingTime: [],
+          branchRequests: [],
+          statusDistribution: [],
+          supplierPerformance: [],
+          quantityAccuracy: [],
+          systemActivity: [],
+          bottleneckAnalysis: [],
           loading: false,
           error: '차트 데이터를 불러오는데 실패했습니다.',
-        }));
+        };
       }
     };
 
-    loadData();
-
-    // 5분마다 데이터 업데이트 (실시간 느낌)
-    const interval = setInterval(() => {
-      if (Math.random() > 0.8) { // 20% 확률로 데이터 업데이트
-        loadData();
-      }
-    }, 300000); // 5분
-
-    return () => {
-      clearInterval(interval);
-    };
+    // 데이터 로딩
+    fetchChartData().then(setData);
   }, [userRole]);
 
   return data;
+};
+
+// 월별 트렌드 계산 함수
+const calculateMonthlyTrend = (requests: any[]): MonthlyTrendData[] => {
+  const now = new Date();
+  const monthlyData: { [key: string]: { requests: number; completed: number; pending: number } } = {};
+
+  // 최근 6개월 초기화
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthKey = `${date.getMonth() + 1}월`;
+    monthlyData[monthKey] = { requests: 0, completed: 0, pending: 0 };
+  }
+
+  requests.forEach(request => {
+    if (request.createdAt?.toDate) {
+      const createdDate = request.createdAt.toDate();
+      const monthKey = `${createdDate.getMonth() + 1}월`;
+      
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].requests++;
+        if (request.currentStatus === 'branch_received_confirmed') {
+          monthlyData[monthKey].completed++;
+        } else {
+          monthlyData[monthKey].pending++;
+        }
+      }
+    }
+  });
+
+  return Object.entries(monthlyData).map(([month, data]) => ({
+    month,
+    ...data
+  }));
+};
+
+// 카테고리별 분포 계산 함수
+const calculateCategoryDistribution = (requests: any[]): CategoryDistributionData[] => {
+  const categoryCount: { [key: string]: number } = {};
+  const colors = ['#1976d2', '#ed6c02', '#2e7d32', '#9c27b0', '#d32f2f'];
+
+  requests.forEach(request => {
+    const category = request.itemGroup1 || '기타';
+    categoryCount[category] = (categoryCount[category] || 0) + 1;
+  });
+
+  const totalCount = Object.values(categoryCount).reduce((sum, count) => sum + count, 0);
+  
+  return Object.entries(categoryCount).map(([category, count], index) => ({
+    category,
+    count,
+    percentage: Math.round((count / totalCount) * 100),
+    color: colors[index % colors.length]
+  }));
+};
+
+// 처리 시간 분석 계산 함수 (요청접수 제외)
+const calculateProcessingTime = (requests: any[]): ProcessingTimeData[] => {
+  const stages = [
+    { key: 'po_processing', name: '이카운트등록 및 구매처발주', from: 'operationsSubmittedAt', to: 'poCompletedAt' },
+    { key: 'warehouse_waiting', name: '입고 대기', from: 'poCompletedAt', to: 'warehouseReceiptAt' },
+    { key: 'branch_dispatch', name: '지점 출고', from: 'warehouseReceiptAt', to: 'branchDispatchCompletedAt' }
+  ];
+
+  return stages.map(stage => {
+    const processingTimes: number[] = [];
+
+    requests.forEach(request => {
+      const fromDate = request[stage.from]?.toDate?.();
+      const toDate = request[stage.to]?.toDate?.();
+
+      if (fromDate && toDate) {
+        const diffTime = toDate.getTime() - fromDate.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          processingTimes.push(diffDays);
+        }
+      }
+    });
+
+    if (processingTimes.length === 0) {
+      return {
+        stage: stage.name,
+        averageDays: 0,
+        minDays: 0,
+        maxDays: 0
+      };
+    }
+
+    return {
+      stage: stage.name,
+      averageDays: Math.round(processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length),
+      minDays: Math.min(...processingTimes),
+      maxDays: Math.max(...processingTimes)
+    };
+  });
+};
+
+// 지점별 요청 현황 계산 함수
+const calculateBranchRequests = (requests: any[], branches: any[]): BranchRequestData[] => {
+  return branches.map(branch => {
+    const branchRequests = requests.filter(request => 
+      request.branchDispatchQuantities?.some((dispatch: any) => 
+        dispatch.branchName === branch.branchName
+      )
+    );
+
+    const completedRequests = branchRequests.filter(request => 
+      request.currentStatus === 'branch_received_confirmed'
+    ).length;
+
+    const totalRequests = branchRequests.length;
+    const pendingRequests = totalRequests - completedRequests;
+    const completionRate = totalRequests > 0 ? Math.round((completedRequests / totalRequests) * 100) : 0;
+
+    return {
+      branchName: branch.branchName,
+      totalRequests,
+      completedRequests,
+      pendingRequests,
+      completionRate
+    };
+  });
+};
+
+// 상태별 분포 계산 함수
+const calculateStatusDistribution = (requests: any[]): StatusDistributionData[] => {
+  const statusCount: { [key: string]: number } = {};
+  const statusLabels: { [key: string]: { label: string; color: string } } = {
+    'operations_submitted': { label: '요청 완료', color: '#ed6c02' },
+    'po_completed': { label: '발주 완료', color: '#9c27b0' },
+    'warehouse_received': { label: '입고 완료', color: '#2e7d32' },
+    'branch_dispatched': { label: '출고 완료', color: '#388e3c' },
+    'partial_dispatched': { label: '부분 출고', color: '#ff9800' },
+    'branch_received_confirmed': { label: '입고 확인', color: '#4caf50' }
+  };
+
+  requests.forEach(request => {
+    const status = request.currentStatus;
+    if (status && statusLabels[status]) {
+      statusCount[status] = (statusCount[status] || 0) + 1;
+    }
+  });
+
+  return Object.entries(statusCount).map(([status, count]) => ({
+    status,
+    count,
+    color: statusLabels[status]?.color || '#666',
+    label: statusLabels[status]?.label || status
+  }));
+};
+
+// 수량 정확도 계산 함수
+const calculateQuantityAccuracy = (requests: any[]): QuantityAccuracyData[] => {
+  const now = new Date();
+  const monthlyData: { [key: string]: { requested: number; actual: number; count: number } } = {};
+
+  // 최근 6개월 초기화
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthKey = `${date.getMonth() + 1}월`;
+    monthlyData[monthKey] = { requested: 0, actual: 0, count: 0 };
+  }
+
+  requests.forEach(request => {
+    if (request.createdAt?.toDate && request.requestedQuantity && request.actualReceivedQuantity) {
+      const createdDate = request.createdAt.toDate();
+      const monthKey = `${createdDate.getMonth() + 1}월`;
+      
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].requested += request.requestedQuantity;
+        monthlyData[monthKey].actual += request.actualReceivedQuantity;
+        monthlyData[monthKey].count++;
+      }
+    }
+  });
+
+  return Object.entries(monthlyData).map(([month, data]) => {
+    const accuracyRate = data.requested > 0 ? Math.round((data.actual / data.requested) * 100) : 100;
+    return {
+      month,
+      requestedQuantity: data.requested,
+      actualQuantity: data.actual,
+      accuracyRate
+    };
+  });
+};
+
+// 프로세스 병목 분석 계산 함수
+const calculateBottleneckAnalysis = (requests: any[]): BottleneckData[] => {
+  const stages = [
+    { key: 'po_processing', name: '이카운트등록 및 구매처발주', from: 'operationsSubmittedAt', to: 'poCompletedAt' },
+    { key: 'warehouse_waiting', name: '입고 대기', from: 'poCompletedAt', to: 'warehouseReceiptAt' },
+    { key: 'branch_dispatch', name: '지점 출고', from: 'warehouseReceiptAt', to: 'branchDispatchCompletedAt' }
+  ];
+
+  return stages.map(stage => {
+    const waitTimes: number[] = [];
+
+    requests.forEach(request => {
+      const fromDate = request[stage.from]?.toDate?.();
+      const toDate = request[stage.to]?.toDate?.();
+
+      if (fromDate && toDate) {
+        const diffTime = toDate.getTime() - fromDate.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          waitTimes.push(diffDays);
+        }
+      }
+    });
+
+    if (waitTimes.length === 0) {
+      return {
+        stage: stage.name,
+        avgWaitTime: 0,
+        maxWaitTime: 0,
+        bottleneckScore: 0
+      };
+    }
+
+    const avgWaitTime = waitTimes.reduce((sum, time) => sum + time, 0) / waitTimes.length;
+    const maxWaitTime = Math.max(...waitTimes);
+    
+    // 병목 점수: 평균 대기시간과 최대 대기시간을 기반으로 계산 (0-100점)
+    const bottleneckScore = Math.min(100, Math.round((avgWaitTime * 2 + maxWaitTime) / 3 * 10));
+
+    return {
+      stage: stage.name,
+      avgWaitTime: Math.round(avgWaitTime * 10) / 10,
+      maxWaitTime,
+      bottleneckScore
+    };
+  });
 }; 

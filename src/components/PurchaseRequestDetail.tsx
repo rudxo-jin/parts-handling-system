@@ -29,7 +29,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ko } from 'date-fns/locale';
-import { doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { PurchaseRequest, BranchDispatchInfo } from '../types';
@@ -102,8 +102,16 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
       setExpectedDeliveryDate(request.expectedDeliveryDate || null);
       setExpectedDeliveryQuantity(request.expectedDeliveryQuantity || 0);
       setActualSupplier(request.actualSupplier || '');
-      setActualReceiptDate(request.warehouseReceiptAt || new Date());
-      setActualReceivedQuantity(request.actualReceivedQuantity || 0);
+      
+      // 물류창고 입고 관련 초기화 - po_completed 상태일 때 빠른입력과 동일하게 설정
+      if (request.currentStatus === 'po_completed') {
+        setActualReceiptDate(new Date()); // 오늘 날짜로 설정
+        setActualReceivedQuantity(request.expectedDeliveryQuantity || request.totalRequestedQuantity || 0); // 예정수량으로 설정
+      } else {
+        setActualReceiptDate(request.warehouseReceiptAt || new Date());
+        setActualReceivedQuantity(request.actualReceivedQuantity || 0);
+      }
+      
       setItemGroup1(request.itemGroup1 || '');
       setItemGroup2(request.itemGroup2 || '');
       setItemGroup3(request.itemGroup3 || '');
@@ -113,6 +121,24 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
       if (request.branchDispatchQuantities && request.branchDispatchQuantities.length > 0) {
         setBranchDispatchQuantities(request.branchDispatchQuantities);
         setBranchReceiptQuantities(request.branchDispatchQuantities);
+      } else if (request.currentStatus === 'warehouse_received' || request.currentStatus === 'partial_dispatched') {
+        // warehouse_received나 partial_dispatched 상태일 때 빠른입력과 동일하게 초기화
+        const initialDispatchQuantities = request.branchRequirements?.map(req => {
+          // 기존 출고 정보가 있으면 사용, 없으면 초기값 설정
+          const existingDispatch = request.branchDispatchQuantities?.find(
+            dispatch => dispatch.branchId === req.branchId
+          );
+          
+          return {
+            branchId: req.branchId,
+            branchName: req.branchName,
+            requiredQuantity: Number(req.requestedQuantity),
+            dispatchedQuantity: existingDispatch?.dispatchedQuantity || Number(req.requestedQuantity),
+            isDispatched: existingDispatch?.isDispatched || false,
+          };
+        }) || [];
+        setBranchDispatchQuantities(initialDispatchQuantities);
+        setBranchReceiptQuantities(initialDispatchQuantities);
       } else {
         // 기본 지점 정보로 초기화
         const defaultBranches: BranchDispatchInfo[] = [
@@ -162,6 +188,10 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         comments: '이카운트 등록 완료',
       };
 
+      // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+      const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+      const updatedHistory = [...currentHistory, newHistoryEntry];
+
       await updateDoc(requestRef, {
         currentStatus: 'ecount_registered',
         currentResponsibleTeam: 'purchasing',
@@ -170,7 +200,7 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         itemGroup1: itemGroup1,
         itemGroup2: itemGroup2,
         itemGroup3: itemGroup3,
-        statusHistory: arrayUnion(newHistoryEntry),
+        statusHistory: updatedHistory,
         updatedAt: Timestamp.now(),
       });
 
@@ -209,11 +239,15 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         comments: '이카운트 등록 정보 수정',
       };
 
+      // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+      const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+      const updatedHistory = [...currentHistory, updateHistoryEntry];
+
       await updateDoc(requestRef, {
         itemGroup1: itemGroup1,
         itemGroup2: itemGroup2,
         itemGroup3: itemGroup3,
-        statusHistory: arrayUnion(updateHistoryEntry),
+        statusHistory: updatedHistory,
         updatedAt: Timestamp.now(),
       });
 
@@ -259,6 +293,14 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         comments: '구매처 발주 완료',
       };
 
+      // 현재 statusHistory가 배열인지 확인하고 안전하게 처리
+      const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+      console.log('현재 히스토리:', currentHistory);
+      console.log('추가할 히스토리:', newHistoryEntry);
+
+      // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+      const updatedHistory = [...currentHistory, newHistoryEntry];
+
       await updateDoc(requestRef, {
         currentStatus: 'po_completed',
         currentResponsibleTeam: 'logistics',
@@ -267,10 +309,11 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         expectedDeliveryDate: Timestamp.fromDate(expectedDeliveryDate),
         expectedDeliveryQuantity: expectedDeliveryQuantity,
         actualSupplier: finalActualSupplier,
-        statusHistory: arrayUnion(newHistoryEntry),
+        statusHistory: updatedHistory,
         updatedAt: Timestamp.now(),
       });
 
+      console.log('구매처 발주 완료 처리 성공:', request.id);
       setActualSupplier('');
       onUpdate();
       onClose();
@@ -304,16 +347,24 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         comments: '물류창고 입고 완료',
       };
 
+      console.log('물류창고 입고 - 현재 히스토리:', request.statusHistory);
+      console.log('물류창고 입고 - 추가할 히스토리:', newHistoryEntry);
+
+      // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+      const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+      const updatedHistory = [...currentHistory, newHistoryEntry];
+
       await updateDoc(requestRef, {
         currentStatus: 'warehouse_received',
         currentResponsibleTeam: 'logistics',
         warehouseReceiptAt: Timestamp.fromDate(actualReceiptDate),
         warehouseReceiptUid: userProfile?.id || '',
         actualReceivedQuantity: actualReceivedQuantity,
-        statusHistory: arrayUnion(newHistoryEntry),
+        statusHistory: updatedHistory,
         updatedAt: Timestamp.now(),
       });
 
+      console.log('물류창고 입고 완료 처리 성공:', request.id);
       onUpdate();
       onClose();
       
@@ -355,6 +406,13 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         comments: '지점 출고 완료',
       };
 
+      console.log('지점 출고 - 현재 히스토리:', request.statusHistory);
+      console.log('지점 출고 - 추가할 히스토리:', newHistoryEntry);
+
+      // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+      const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+      const updatedHistory = [...currentHistory, newHistoryEntry];
+
       const updateData = removeUndefinedValues({
         currentStatus: 'branch_dispatched',
         currentResponsibleTeam: 'operations',
@@ -362,12 +420,13 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         branchDispatchCompleterUid: userProfile?.id || '',
         branchDispatchQuantities: branchDispatchQuantities.map(branch => removeUndefinedValues(branch)),
         dispatchMemo: dispatchMemo,
-        statusHistory: arrayUnion(newHistoryEntry),
+        statusHistory: updatedHistory,
         updatedAt: Timestamp.now(),
       });
 
       await updateDoc(requestRef, updateData);
 
+      console.log('지점 출고 완료 처리 성공:', request.id);
       setDispatchMemo('');
       onUpdate();
       onClose();
@@ -401,13 +460,17 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
         comments: '지점 입고 확인 완료',
       };
 
+      // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+      const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+      const updatedHistory = [...currentHistory, newHistoryEntry];
+
       await updateDoc(requestRef, {
         currentStatus: 'branch_received_confirmed',
         currentResponsibleTeam: 'completed',
         branchReceiptConfirmedAt: Timestamp.now(),
         branchReceiptConfirmerUid: userProfile?.id || '',
         branchDispatchQuantities: branchReceiptQuantities,
-        statusHistory: arrayUnion(newHistoryEntry),
+        statusHistory: updatedHistory,
         updatedAt: Timestamp.now(),
       });
 
@@ -533,11 +596,6 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                 color={getStatusColor(request.currentStatus) as any}
                 size="small"
               />
-              <Chip 
-                label={getImportanceLabel(request.importance)} 
-                color={getImportanceColor(request.importance) as any}
-                size="small"
-              />
             </Box>
           </Box>
         </DialogTitle>
@@ -555,111 +613,166 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
               <Typography variant="h6">기본 정보</Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 2 }}>
                 <Box>
-                  <Typography variant="body2" color="textSecondary">부품명</Typography>
-                  <Typography variant="body1" fontWeight="bold">{request.requestedPartName}</Typography>
+                  <Typography variant="caption" color="text.secondary">요청일</Typography>
+                  <Typography variant="body2">{request.requestDate.toLocaleDateString('ko-KR')}</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="body2" color="textSecondary">부품번호</Typography>
-                  <Typography variant="body1">{request.requestedPartNumber}</Typography>
+                  <Typography variant="caption" color="text.secondary">부품번호</Typography>
+                  <Typography variant="body2">{request.requestedPartNumber}</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="body2" color="textSecondary">총 요청 수량</Typography>
-                  <Typography variant="body1">{request.totalRequestedQuantity}개</Typography>
+                  <Typography variant="caption" color="text.secondary">부품명</Typography>
+                  <Typography variant="body2">{request.requestedPartName}</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="body2" color="textSecondary">초기 공급처</Typography>
-                  <Typography variant="body1">{request.initialSupplier}</Typography>
-                </Box>
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <Typography variant="body2" color="textSecondary">요청 메모</Typography>
-                  <Typography variant="body1">{request.notes || '없음'}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="textSecondary">요청자</Typography>
-                  <Typography variant="body1">{request.requestorName}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="textSecondary">요청일</Typography>
-                  <Typography variant="body1">
-                    {request.requestDate?.toLocaleDateString('ko-KR')}
+                  <Typography variant="caption" color="text.secondary">판매가</Typography>
+                  <Typography variant="body2">
+                    {request.price && request.price > 0 
+                      ? `${request.price.toLocaleString()}원` 
+                      : '미입력'
+                    }
                   </Typography>
                 </Box>
+                
+                {/* 품목그룹 정보 */}
+                <Box>
+                  <Typography variant="caption" color="text.secondary">품목그룹 1</Typography>
+                  <Typography variant="body2">{request.itemGroup1 || '미입력'}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">품목그룹 2</Typography>
+                  <Typography variant="body2">{request.itemGroup2 || '미입력'}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">품목그룹 3</Typography>
+                  <Typography variant="body2">{request.itemGroup3 || '미입력'}</Typography>
+                </Box>
+                
+                {/* 요청 수량 명세 */}
+                <Box sx={{ gridColumn: '1 / -1' }}>
+                  <Typography variant="caption" color="text.secondary">요청 수량 명세</Typography>
+                  <Box sx={{ mt: 1, p: 2, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.200' }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2, mb: 2 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">총 요청수량</Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {request.totalRequestedQuantity?.toLocaleString() || 0}개
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">지점별 요청</Typography>
+                        <Typography variant="body2">
+                          {request.branchRequirements?.reduce((sum, req) => sum + Number(req.requestedQuantity), 0).toLocaleString() || 0}개
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">물류창고 적정재고</Typography>
+                        <Typography variant="body2">
+                          {request.logisticsStockQuantity?.toLocaleString() || 0}개
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    {/* 지점별 상세 수량 */}
+                    {request.branchRequirements && request.branchRequirements.length > 0 && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                          지점별 상세 요청수량
+                        </Typography>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1 }}>
+                          {request.branchRequirements.map((req, index) => (
+                            <Box key={index} sx={{ 
+                              p: 1, 
+                              bgcolor: 'white', 
+                              borderRadius: 0.5, 
+                              border: '1px solid', 
+                              borderColor: 'grey.300',
+                              textAlign: 'center'
+                            }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                {req.branchName}
+                              </Typography>
+                              <Typography variant="body2" fontWeight="medium" sx={{ fontSize: '0.85rem' }}>
+                                {Number(req.requestedQuantity).toLocaleString()}개
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+                
+                {/* 부품 설명 표시 */}
+                {request.partDescription && (
+                  <Box sx={{ gridColumn: '1 / -1' }}>
+                    <Typography variant="caption" color="text.secondary">부품 설명</Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      {request.partDescription}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* 요청 관련 메모 표시 */}
+                {request.notes && (
+                  <Box sx={{ gridColumn: '1 / -1' }}>
+                    <Typography variant="caption" color="text.secondary">요청 관련 메모</Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5, p: 1, bgcolor: 'primary.50', borderRadius: 1, border: '1px solid', borderColor: 'primary.200' }}>
+                      📝 {request.notes}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* 첨부 이미지 표시 */}
+                {request.partImages && request.partImages.length > 0 && (
+                  <Box sx={{ gridColumn: '1 / -1' }}>
+                    <Typography variant="caption" color="text.secondary">첨부 이미지 ({request.partImages.length}개)</Typography>
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {request.partImages.map((image, index) => (
+                        <Box key={index} sx={{ 
+                          width: 100, 
+                          height: 100, 
+                          border: '1px solid', 
+                          borderColor: 'grey.300', 
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: 'grey.50'
+                        }}>
+                          {typeof image === 'string' ? (
+                            <img 
+                              src={image} 
+                              alt={`부품 이미지 ${index + 1}`}
+                              style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                objectFit: 'cover' 
+                              }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).parentElement!.innerHTML = '🖼️<br/>이미지<br/>로드 실패';
+                              }}
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                              🖼️<br/>이미지<br/>{index + 1}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </Box>
             </AccordionDetails>
           </Accordion>
 
-          {/* 이카운트 등록 섹션 */}
-          {(request.currentStatus === 'operations_submitted' || 
-            request.currentStatus === 'ecount_registered' || 
-            editMode) && (
-            <Accordion expanded={expandedSections.ecount} onChange={() => toggleSection('ecount')}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="h6">이카운트 등록</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="품목그룹 1"
-                      value={itemGroup1}
-                      onChange={(e) => setItemGroup1(e.target.value)}
-                      placeholder={request.itemGroup1 || '품목그룹 1을 입력하세요'}
-                    />
-                  </Box>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="품목그룹 2"
-                      value={itemGroup2}
-                      onChange={(e) => setItemGroup2(e.target.value)}
-                      placeholder={request.itemGroup2 || '품목그룹 2를 입력하세요'}
-                    />
-                  </Box>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="품목그룹 3"
-                      value={itemGroup3}
-                      onChange={(e) => setItemGroup3(e.target.value)}
-                      placeholder={request.itemGroup3 || '품목그룹 3을 입력하세요'}
-                    />
-                  </Box>
-                  {request.currentStatus === 'operations_submitted' && (
-                    <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleEcountRegistration}
-                        disabled={processing || !itemGroup1 || !itemGroup2 || !itemGroup3}
-                        startIcon={processing ? <CircularProgress size={20} /> : null}
-                      >
-                        이카운트 등록 완료
-                      </Button>
-                    </Box>
-                  )}
-                  {editMode && editSection === 'ecount' && (
-                    <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleEcountUpdate}
-                        disabled={processing || !itemGroup1 || !itemGroup2 || !itemGroup3}
-                        startIcon={processing ? <CircularProgress size={20} /> : null}
-                      >
-                        이카운트 정보 수정
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-          )}
-
           {/* 구매처 발주 섹션 */}
-          {(request.currentStatus === 'ecount_registered' || 
+          {userProfile?.role !== 'operations' && (request.currentStatus === 'operations_submitted' || 
             request.currentStatus === 'po_completed' || 
             editMode) && (
             <Accordion expanded={expandedSections.po} onChange={() => toggleSection('po')}>
@@ -667,40 +780,41 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                 <Typography variant="h6">구매처 발주</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <DatePicker
-                      label="입고 예정일"
-                      value={expectedDeliveryDate}
-                      onChange={(newValue) => setExpectedDeliveryDate(newValue)}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          placeholder: request.expectedDeliveryDate?.toLocaleDateString('ko-KR') || '입고 예정일을 선택하세요'
-                        }
-                      }}
-                    />
-                  </Box>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="입고 예정 수량"
-                      type="number"
-                      value={expectedDeliveryQuantity}
-                      onChange={(e) => setExpectedDeliveryQuantity(Number(e.target.value))}
-                      placeholder={request.expectedDeliveryQuantity?.toString() || '입고 예정 수량을 입력하세요'}
-                    />
-                  </Box>
-                  <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="실제 발주처"
-                      value={actualSupplier}
-                      onChange={(e) => setActualSupplier(e.target.value)}
-                      placeholder={request.actualSupplier || request.initialSupplier || '실제 발주처를 입력하세요'}
-                    />
-                  </Box>
-                  {request.currentStatus === 'ecount_registered' && (
+                {request.currentStatus === 'operations_submitted' ? (
+                  // 운영부 요청 완료 상태: 입력 가능
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
+                      <DatePicker
+                        label="입고 예정일"
+                        value={expectedDeliveryDate}
+                        onChange={(newValue) => setExpectedDeliveryDate(newValue)}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            placeholder: request.expectedDeliveryDate?.toLocaleDateString('ko-KR') || '입고 예정일을 선택하세요'
+                          }
+                        }}
+                      />
+                    </Box>
+                    <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
+                      <TextField
+                        fullWidth
+                        label="입고 예정 수량"
+                        type="number"
+                        value={expectedDeliveryQuantity}
+                        onChange={(e) => setExpectedDeliveryQuantity(Number(e.target.value))}
+                        placeholder={request.expectedDeliveryQuantity?.toString() || '입고 예정 수량을 입력하세요'}
+                      />
+                    </Box>
+                    <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
+                      <TextField
+                        fullWidth
+                        label="실제 발주처"
+                        value={actualSupplier}
+                        onChange={(e) => setActualSupplier(e.target.value)}
+                        placeholder={request.actualSupplier || request.initialSupplier || '실제 발주처를 입력하세요'}
+                      />
+                    </Box>
                     <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
                       <Button
                         variant="contained"
@@ -712,14 +826,145 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                         구매처 발주 완료
                       </Button>
                     </Box>
-                  )}
-                </Box>
+                  </Box>
+                ) : (
+                  // 구매처 발주 완료 상태: 읽기 전용 표시
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">입고 예정일</Typography>
+                      <Typography variant="body2">
+                        {request.expectedDeliveryDate?.toLocaleDateString('ko-KR') || '미입력'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">입고 예정 수량</Typography>
+                      <Typography variant="body2">
+                        {request.expectedDeliveryQuantity?.toLocaleString() || 0}개
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">실제 발주처</Typography>
+                      <Typography variant="body2">
+                        {request.actualSupplier || request.initialSupplier || '미입력'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">발주 완료일</Typography>
+                      <Typography variant="body2">
+                        {request.poCompletedAt?.toLocaleDateString('ko-KR') || '미입력'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
               </AccordionDetails>
             </Accordion>
           )}
 
+          {/* 운영담당자를 위한 물류 진행 상황 안내 */}
+          {userProfile?.role === 'operations' && (
+            request.currentStatus === 'po_completed' || 
+            request.currentStatus === 'warehouse_received' || 
+            request.currentStatus === 'partial_dispatched' ||
+            request.currentStatus === 'branch_dispatched' ||
+            request.currentStatus === 'branch_received_confirmed'
+          ) && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.200' }}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                🚚 물류 진행 상황
+              </Typography>
+              
+              {request.currentStatus === 'po_completed' && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>구매처 발주가 완료되었습니다.</strong><br/>
+                    물류팀에서 창고 입고 처리를 진행 중입니다.
+                  </Typography>
+                </Alert>
+              )}
+              
+              {request.currentStatus === 'warehouse_received' && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>물류창고 입고가 완료되었습니다.</strong><br/>
+                    물류팀에서 지점 출고 처리를 진행 중입니다.
+                  </Typography>
+                </Alert>
+              )}
+              
+              {request.currentStatus === 'partial_dispatched' && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>일부 지점 출고가 완료되었습니다.</strong><br/>
+                    물류팀에서 나머지 지점 출고를 진행 중입니다.
+                  </Typography>
+                </Alert>
+              )}
+              
+              {request.currentStatus === 'branch_dispatched' && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>모든 지점 출고가 완료되었습니다.</strong><br/>
+                    각 지점에서 입고 확인을 진행 중입니다.
+                  </Typography>
+                </Alert>
+              )}
+              
+              {request.currentStatus === 'branch_received_confirmed' && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>모든 지점 입고 확인이 완료되었습니다.</strong><br/>
+                    부품 취급 업무가 성공적으로 완료되었습니다.
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* 물류 진행 상황 요약 */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mt: 2 }}>
+                {request.warehouseReceiptAt && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">창고 입고일</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {request.warehouseReceiptAt.toLocaleDateString('ko-KR')}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {request.actualReceivedQuantity && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">입고 수량</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {request.actualReceivedQuantity.toLocaleString()}개
+                    </Typography>
+                  </Box>
+                )}
+                
+                {request.branchDispatchQuantities && request.branchDispatchQuantities.length > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">출고 완료 지점</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {request.branchDispatchQuantities.filter(b => b.isDispatched).length} / {request.branchDispatchQuantities.length}개 지점
+                    </Typography>
+                  </Box>
+                )}
+                
+                {request.branchDispatchCompletedAt && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">출고 완료일</Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {request.branchDispatchCompletedAt.toLocaleDateString('ko-KR')}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+              
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontStyle: 'italic' }}>
+                💡 물류 관련 세부 작업은 물류팀에서 처리하며, 진행 상황은 실시간으로 업데이트됩니다.
+              </Typography>
+            </Box>
+          )}
+
           {/* 물류창고 입고 섹션 */}
-          {(request.currentStatus === 'po_completed' || 
+          {userProfile?.role !== 'operations' && (request.currentStatus === 'po_completed' || 
             request.currentStatus === 'warehouse_received' || 
             editMode) && (
             <Accordion expanded={expandedSections.warehouse} onChange={() => toggleSection('warehouse')}>
@@ -727,31 +972,32 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                 <Typography variant="h6">물류창고 입고</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <DatePicker
-                      label="실제 입고일"
-                      value={actualReceiptDate}
-                      onChange={(newValue) => setActualReceiptDate(newValue)}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          placeholder: request.warehouseReceiptAt?.toLocaleDateString('ko-KR') || '실제 입고일을 선택하세요'
-                        }
-                      }}
-                    />
-                  </Box>
-                  <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="실제 입고 수량"
-                      type="number"
-                      value={actualReceivedQuantity}
-                      onChange={(e) => setActualReceivedQuantity(Number(e.target.value))}
-                      placeholder={request.actualReceivedQuantity?.toString() || '실제 입고 수량을 입력하세요'}
-                    />
-                  </Box>
-                  {request.currentStatus === 'po_completed' && (
+                {request.currentStatus === 'po_completed' ? (
+                  // 구매처 발주 완료 상태: 입력 가능
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
+                      <DatePicker
+                        label="실제 입고일"
+                        value={actualReceiptDate}
+                        onChange={(newValue) => setActualReceiptDate(newValue)}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            placeholder: request.warehouseReceiptAt?.toLocaleDateString('ko-KR') || '실제 입고일을 선택하세요'
+                          }
+                        }}
+                      />
+                    </Box>
+                    <Box sx={{ flex: '1 1 300px', minWidth: 0 }}>
+                      <TextField
+                        fullWidth
+                        label="실제 입고 수량"
+                        type="number"
+                        value={actualReceivedQuantity}
+                        onChange={(e) => setActualReceivedQuantity(Number(e.target.value))}
+                        placeholder={request.actualReceivedQuantity?.toString() || '실제 입고 수량을 입력하세요'}
+                      />
+                    </Box>
                     <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
                       <Button
                         variant="contained"
@@ -763,14 +1009,42 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                         물류창고 입고 완료
                       </Button>
                     </Box>
-                  )}
-                </Box>
+                  </Box>
+                ) : (
+                  // 물류창고 입고 완료 상태: 읽기 전용 표시
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 2 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">실제 입고일</Typography>
+                      <Typography variant="body2">
+                        {request.warehouseReceiptAt?.toLocaleDateString('ko-KR') || '미입력'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">실제 입고 수량</Typography>
+                      <Typography variant="body2">
+                        {request.actualReceivedQuantity?.toLocaleString() || 0}개
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">입고 처리자</Typography>
+                      <Typography variant="body2">
+                        {request.warehouseReceiptUid || '미입력'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">입고 완료일</Typography>
+                      <Typography variant="body2">
+                        {request.warehouseReceiptAt?.toLocaleDateString('ko-KR') || '미입력'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
               </AccordionDetails>
             </Accordion>
           )}
 
           {/* 지점 출고 섹션 */}
-          {(request.currentStatus === 'warehouse_received' || 
+          {userProfile?.role !== 'operations' && (request.currentStatus === 'warehouse_received' || 
             request.currentStatus === 'partial_dispatched' ||
             request.currentStatus === 'branch_dispatched' || 
             editMode) && (
@@ -779,72 +1053,282 @@ const PurchaseRequestDetail: React.FC<PurchaseRequestDetailProps> = ({
                 <Typography variant="h6">지점 출고</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                  <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                      창고 보유 수량: {request.actualReceivedQuantity || 0}개
+                {(request.currentStatus === 'warehouse_received' || request.currentStatus === 'partial_dispatched') ? (
+                  // 물류창고 입고 완료 또는 부분 출고 완료 상태: 입력 가능
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {/* 지점별 출고 수량 설정 - 빠른입력과 동일한 디자인 */}
+                    <Typography variant="subtitle2" fontWeight="medium" gutterBottom>
+                      🚚 지점별 출고 수량 설정
                     </Typography>
-                  </Box>
-                  <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>지점명</TableCell>
-                            <TableCell align="center">출고 수량</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {branchDispatchQuantities.map((branch, index) => (
-                            <TableRow key={index}>
-                              <TableCell>{branch.branchName}</TableCell>
-                              <TableCell align="center">
-                                <TextField
-                                  type="number"
-                                  size="small"
-                                  value={branch.dispatchedQuantity}
-                                  onChange={(e) => handleBranchDispatchQuantityChange(index, Number(e.target.value))}
-                                  inputProps={{ min: 0, max: request.actualReceivedQuantity || 0 }}
-                                  sx={{ width: 80 }}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Box>
-                  <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                    <TextField
-                      fullWidth
-                      label="출고 메모"
-                      multiline
-                      rows={2}
-                      value={dispatchMemo}
-                      onChange={(e) => setDispatchMemo(e.target.value)}
-                      placeholder="출고 관련 메모를 입력하세요 (선택사항)"
-                    />
-                  </Box>
-                  {(request.currentStatus === 'warehouse_received' || request.currentStatus === 'partial_dispatched') && (
-                    <Box sx={{ flex: '1 1 100%', minWidth: 0 }}>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleBranchDispatch}
-                        disabled={processing}
-                        startIcon={processing ? <CircularProgress size={20} /> : null}
-                      >
-                        지점 출고 완료
-                      </Button>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                      {branchDispatchQuantities.map((branch, index) => (
+                        <Box 
+                          key={index} 
+                          sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            gap: 1, 
+                            p: 1, 
+                            bgcolor: branch.isDispatched ? 'success.50' : 'grey.50', 
+                            borderRadius: 1,
+                            border: '1px solid',
+                            borderColor: branch.isDispatched ? 'success.200' : 'grey.300'
+                          }}
+                        >
+                          <Typography variant="body2" fontWeight="medium" sx={{ minWidth: 60, fontSize: '0.85rem' }}>
+                            {branch.branchName}
+                          </Typography>
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={branch.dispatchedQuantity}
+                            onChange={(e) => {
+                              const updated = [...branchDispatchQuantities];
+                              updated[index] = { ...updated[index], dispatchedQuantity: Number(e.target.value) };
+                              setBranchDispatchQuantities(updated);
+                            }}
+                            InputProps={{ 
+                              endAdornment: '개',
+                              sx: { fontSize: '0.8rem' }
+                            }}
+                            sx={{ width: 80 }}
+                            disabled={branch.isDispatched}
+                          />
+                          {branch.isDispatched ? (
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                const updated = [...branchDispatchQuantities];
+                                updated[index] = { ...updated[index], isDispatched: false };
+                                setBranchDispatchQuantities(updated);
+                              }}
+                              color="warning"
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem', minWidth: 50, px: 1 }}
+                            >
+                              취소
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                const updated = [...branchDispatchQuantities];
+                                updated[index] = { ...updated[index], isDispatched: true };
+                                setBranchDispatchQuantities(updated);
+                              }}
+                              color="primary"
+                              variant="contained"
+                              sx={{ fontSize: '0.7rem', minWidth: 50, px: 1 }}
+                            >
+                              출고
+                            </Button>
+                          )}
+                          {branch.isDispatched && (
+                            <Typography variant="caption" color="success.main" sx={{ fontSize: '0.7rem', ml: 0.5 }}>
+                              ✅
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
                     </Box>
-                  )}
-                </Box>
+                    
+                    {/* 재고 현황 - 빠른입력과 동일한 디자인 */}
+                    <Box sx={{ mt: 2, p: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
+                      <Typography variant="subtitle2" fontWeight="medium" gutterBottom>
+                        📊 재고 현황
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">창고 입고 수량</Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {request.actualReceivedQuantity?.toLocaleString() || 0}개
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">지점 출고 수량 합계</Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {branchDispatchQuantities.filter(item => item.isDispatched).reduce((sum, item) => sum + item.dispatchedQuantity, 0).toLocaleString()}개
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">창고 보유 수량 합계</Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {((request.actualReceivedQuantity || 0) - branchDispatchQuantities.filter(item => item.isDispatched).reduce((sum, item) => sum + item.dispatchedQuantity, 0)).toLocaleString()}개
+                          </Typography>
+                        </Box>
+                        <Box sx={{ ml: 'auto' }}>
+                          <Typography variant="caption" color="text.secondary">출고 완료 지점</Typography>
+                          <Typography variant="body2" fontWeight="medium">
+                            {branchDispatchQuantities.filter(item => item.isDispatched).length} / {branchDispatchQuantities.length}개 지점
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                    
+                    {/* 출고 메모 */}
+                    <Box sx={{ mt: 2 }}>
+                      <TextField
+                        fullWidth
+                        label="출고 메모"
+                        multiline
+                        rows={2}
+                        value={dispatchMemo}
+                        onChange={(e) => setDispatchMemo(e.target.value)}
+                        placeholder="출고 관련 메모를 입력하세요 (선택사항)"
+                      />
+                    </Box>
+                    
+                    {/* 출고 완료 버튼 */}
+                    <Box sx={{ mt: 2 }}>
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          color="warning"
+                          onClick={async () => {
+                            // 부분 출고 처리
+                            const dispatchedBranches = branchDispatchQuantities.filter(item => item.isDispatched);
+                            const totalDispatchedQuantity = dispatchedBranches.reduce((sum, item) => sum + item.dispatchedQuantity, 0);
+                            const availableQuantity = request.actualReceivedQuantity || 0;
+                            
+                            if (dispatchedBranches.length === 0) {
+                              setError('최소 1개 지점은 출고 완료 처리해야 합니다.');
+                              return;
+                            }
+                            
+                            if (totalDispatchedQuantity > availableQuantity) {
+                              setError(`창고 보유 수량(${availableQuantity}개)을 초과하여 출고할 수 없습니다. (현재 출고 계획: ${totalDispatchedQuantity}개)`);
+                              return;
+                            }
+
+                            try {
+                              setProcessing(true);
+                              setError('');
+
+                              const requestRef = doc(db, 'purchaseRequests', request.id);
+                              
+                              const newHistoryEntry = {
+                                status: 'partial_dispatched',
+                                updatedAt: Timestamp.now(),
+                                updatedByUid: userProfile?.id || '',
+                                updatedByName: userProfile?.name || '',
+                                comments: `부분 지점 출고 완료 (${dispatchedBranches.length}개 지점, 총 ${totalDispatchedQuantity}개)`,
+                              };
+
+                              // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+                              const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+                              const updatedHistory = [...currentHistory, newHistoryEntry];
+
+                              const updateData = removeUndefinedValues({
+                                currentStatus: 'partial_dispatched',
+                                currentResponsibleTeam: 'logistics',
+                                branchDispatchQuantities: branchDispatchQuantities.map(branch => removeUndefinedValues(branch)),
+                                dispatchMemo: dispatchMemo,
+                                statusHistory: updatedHistory,
+                                updatedAt: Timestamp.now(),
+                              });
+
+                              await updateDoc(requestRef, updateData);
+                              onUpdate();
+                              onClose();
+                              
+                            } catch (error) {
+                              console.error('부분 출고 처리 실패:', error);
+                              setError('부분 출고 처리에 실패했습니다.');
+                            } finally {
+                              setProcessing(false);
+                            }
+                          }}
+                          disabled={processing || branchDispatchQuantities.filter(item => item.isDispatched).length === 0}
+                          startIcon={processing ? <CircularProgress size={20} /> : null}
+                          sx={{ flex: 1 }}
+                        >
+                          부분 출고 완료
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          onClick={handleBranchDispatch}
+                          disabled={processing || branchDispatchQuantities.filter(item => item.isDispatched).length !== branchDispatchQuantities.length}
+                          startIcon={processing ? <CircularProgress size={20} /> : null}
+                          sx={{ flex: 1 }}
+                        >
+                          전체 출고 완료
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Box>
+                ) : (
+                  // 지점 출고 완료 상태: 읽기 전용 표시
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 2 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">창고 보유 수량</Typography>
+                        <Typography variant="body2">
+                          {request.actualReceivedQuantity?.toLocaleString() || 0}개
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">총 출고 수량</Typography>
+                        <Typography variant="body2">
+                          {request.branchDispatchQuantities?.reduce((sum, branch) => sum + (branch.dispatchedQuantity || 0), 0).toLocaleString() || 0}개
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">출고 완료일</Typography>
+                        <Typography variant="body2">
+                          {request.branchDispatchCompletedAt?.toLocaleDateString('ko-KR') || '미입력'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    {/* 지점별 출고 수량 읽기 전용 테이블 */}
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        지점별 출고 수량
+                      </Typography>
+                      <TableContainer component={Paper} variant="outlined">
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>지점명</TableCell>
+                              <TableCell align="center">출고 수량</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {request.branchDispatchQuantities?.map((branch, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{branch.branchName}</TableCell>
+                                <TableCell align="center">
+                                  {branch.dispatchedQuantity?.toLocaleString() || 0}개
+                                </TableCell>
+                              </TableRow>
+                            )) || (
+                              <TableRow>
+                                <TableCell colSpan={2} align="center">출고 정보가 없습니다.</TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                    
+                    {/* 출고 메모 표시 */}
+                    {request.dispatchMemo && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">출고 메모</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                          {request.dispatchMemo}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </AccordionDetails>
             </Accordion>
           )}
 
           {/* 지점 입고 확인 섹션 */}
-          {(request.currentStatus === 'branch_dispatched' || 
+          {userProfile?.role !== 'operations' && (request.currentStatus === 'branch_dispatched' || 
             request.currentStatus === 'branch_received_confirmed' || 
             editMode) && (
             <Accordion expanded={expandedSections.receipt} onChange={() => toggleSection('receipt')}>

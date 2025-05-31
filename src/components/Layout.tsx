@@ -30,12 +30,9 @@ import {
   Build as BuildIcon,
   BugReport as BugReportIcon,
   Speed as SpeedIcon,
-  Analytics as AnalyticsIcon,
-  Security as SecurityIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
@@ -93,18 +90,6 @@ const menuItems: MenuItemType[] = [
     text: '성능 모니터링',
     icon: <SpeedIcon />,
     path: '/admin/performance',
-    roles: ['admin']
-  },
-  {
-    text: '번들 분석',
-    icon: <AnalyticsIcon />,
-    path: '/admin/bundle-analyzer',
-    roles: ['admin']
-  },
-  {
-    text: '보안 검사',
-    icon: <SecurityIcon />,
-    path: '/admin/security',
     roles: ['admin']
   },
   {

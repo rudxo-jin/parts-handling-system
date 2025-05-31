@@ -105,6 +105,20 @@ const MultiPartRequestDetail: React.FC<MultiPartRequestDetailProps> = ({
           </Box>
         ) : (
           <Box sx={{ space: 3 }}>
+            {/* 세트 설명 표시 */}
+            {parts.length > 0 && parts[0].setDescription && (
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    📝 세트 설명
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {parts[0].setDescription}
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+
             {/* 진행 상황 요약 */}
             {progress && (
               <Card sx={{ mb: 3 }}>

@@ -26,7 +26,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { doc, arrayUnion, Timestamp, writeBatch } from 'firebase/firestore';
+import { doc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { PurchaseRequest } from '../types';
@@ -87,7 +87,11 @@ const BulkProcessDialog: React.FC<BulkProcessDialogProps> = ({
 
   const processType = getProcessType();
 
-  // 컴포넌트 초기화
+  // 운영담당자 권한 확인
+  const isOperationsUser = userProfile?.role === 'operations';
+  const isLogisticsProcess = processType.type === 'warehouse' || processType.type === 'dispatch';
+
+  // 컴포넌트 초기화 - 항상 호출되어야 함
   useEffect(() => {
     if (open && requests.length > 0) {
       const initialData: BulkProcessData[] = requests.map(request => {
@@ -122,6 +126,68 @@ const BulkProcessDialog: React.FC<BulkProcessDialogProps> = ({
       setError('');
     }
   }, [open, requests]);
+
+  // 운영담당자가 물류 프로세스에 접근하려는 경우 차단
+  if (isOperationsUser && isLogisticsProcess) {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              🚫 접근 권한 없음
+            </Typography>
+            <IconButton onClick={onClose}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent>
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h5" sx={{ mb: 2, color: 'warning.main' }}>
+              🚚 물류 관련 업무
+            </Typography>
+            
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Typography variant="body1">
+                <strong>운영담당자는 물류 관련 일괄 처리에 접근할 수 없습니다.</strong><br/>
+                물류창고 입고 및 지점 출고 업무는 물류팀에서 처리합니다.
+              </Typography>
+            </Alert>
+
+            <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.200' }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                📋 현재 처리 대상 ({requests.length}건)
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                {requests.slice(0, 5).map((request, index) => (
+                  <Typography key={request.id} variant="body2" sx={{ textAlign: 'left' }}>
+                    {index + 1}. {request.requestedPartNumber} - {request.requestedPartName}
+                  </Typography>
+                ))}
+                {requests.length > 5 && (
+                  <Typography variant="body2" color="text.secondary">
+                    ... 외 {requests.length - 5}건
+                  </Typography>
+                )}
+              </Box>
+
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                💡 물류팀에서 처리 완료 시 실시간으로 상태가 업데이트됩니다.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={onClose} variant="contained" color="primary">
+            확인
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
 
   // 개별 항목 업데이트
   const updateBulkItem = (index: number, field: keyof BulkProcessData, value: any) => {
@@ -300,7 +366,11 @@ const BulkProcessDialog: React.FC<BulkProcessDialogProps> = ({
           };
         }
 
-        updateData.statusHistory = arrayUnion(newHistoryEntry);
+        // statusHistory를 직접 배열로 업데이트 (arrayUnion 대신)
+        const currentHistory = Array.isArray(request.statusHistory) ? request.statusHistory : [];
+        const updatedHistory = [...currentHistory, newHistoryEntry];
+        updateData.statusHistory = updatedHistory;
+        
         batch.update(requestRef, updateData);
       }
 

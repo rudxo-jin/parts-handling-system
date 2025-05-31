@@ -22,25 +22,35 @@ import {
   InputAdornment,
   Alert,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
   Edit as EditIcon,
   Visibility as VisibilityIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import { collection, addDoc, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Part } from '../types';
 import { useNumberInput } from '../hooks/useNumberInput';
+import { useNavigate } from 'react-router-dom';
+import ItemGroupAutocomplete from '../components/ItemGroupAutocomplete';
+import { recordMultipleItemGroupUsage } from '../services/itemGroupService';
 
 const PartsManagement: React.FC = () => {
   const { userProfile } = useAuth();
+  const navigate = useNavigate();
   const [parts, setParts] = useState<Part[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [newPart, setNewPart] = useState({
     partNumber: '',
     name: '',
@@ -53,6 +63,7 @@ const PartsManagement: React.FC = () => {
   });
   const [submitLoading, setSubmitLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
   // 가격 입력을 위한 커스텀 훅
   const priceInput = useNumberInput({ 
@@ -86,7 +97,7 @@ const PartsManagement: React.FC = () => {
     fetchParts();
   }, []);
 
-  // 새 부품 등록
+  // 새 부품 등록 (관리자만)
   const handleSubmit = async () => {
     if (!newPart.partNumber || !newPart.name) {
       alert('부품번호와 부품명은 필수 입력 항목입니다.');
@@ -108,7 +119,15 @@ const PartsManagement: React.FC = () => {
 
       await addDoc(collection(db, 'parts'), partData);
       
-      setSuccess(true);
+      // 품목그룹 사용 기록 저장
+      await recordMultipleItemGroupUsage(
+        newPart.itemGroup1,
+        newPart.itemGroup2,
+        newPart.itemGroup3
+      );
+
+      setError('');
+      alert('부품이 성공적으로 등록되었습니다.');
       setOpenDialog(false);
       setNewPart({
         partNumber: '',
@@ -120,12 +139,10 @@ const PartsManagement: React.FC = () => {
         price: 0,
         currency: 'KRW',
       });
-      priceInput.setValue(0); // 가격 입력 필드도 초기화
+      priceInput.setValue(0);
       
-      // 부품 목록 새로고침
       fetchParts();
       
-      // 성공 메시지 3초 후 숨김
       setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
       console.error('부품 등록에 실패했습니다:', error);
@@ -135,14 +152,44 @@ const PartsManagement: React.FC = () => {
     }
   };
 
-  // 검색 필터링
-  const filteredParts = parts.filter(part =>
-    (part.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (part.partNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (part.itemGroup1 || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (part.itemGroup2 || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (part.itemGroup3 || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // 재주문 요청
+  const handleReorder = (part: Part) => {
+    // 기존 부품 정보를 가지고 신규 구매요청 페이지로 이동
+    const partData = {
+      partNumber: part.partNumber,
+      name: part.name,
+      itemGroup1: part.itemGroup1 || '',
+      itemGroup2: part.itemGroup2 || '',
+      itemGroup3: part.itemGroup3 || '',
+      price: part.price,
+      description: part.description || ''
+    };
+    
+    // URL 파라미터로 부품 정보 전달
+    const params = new URLSearchParams();
+    Object.entries(partData).forEach(([key, value]) => {
+      if (value) params.set(key, value.toString());
+    });
+    
+    navigate(`/new-part-request?${params.toString()}`);
+  };
+
+  // 검색 및 필터링
+  const filteredParts = parts.filter(part => {
+    const matchesSearch = 
+      (part.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (part.partNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (part.itemGroup1 || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (part.itemGroup2 || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (part.itemGroup3 || '').toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = categoryFilter === 'all' || part.itemGroup1 === categoryFilter;
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // 카테고리 목록 생성
+  const categories = Array.from(new Set(parts.map(part => part.itemGroup1).filter(Boolean)));
 
   // 가격 포맷팅
   const formatPrice = (price: number, currency: string) => {
@@ -155,17 +202,26 @@ const PartsManagement: React.FC = () => {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-          부품 관리
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-          sx={{ minWidth: 120 }}
-        >
-          신규 부품 등록
-        </Button>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+            {userProfile?.role === 'operations' ? '부품 검색 및 재주문' : '부품 관리'}
+          </Typography>
+          {userProfile?.role === 'operations' && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              기존 부품을 검색하고 재주문 요청을 할 수 있습니다.
+            </Typography>
+          )}
+        </Box>
+        {userProfile?.role === 'admin' && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenDialog(true)}
+            sx={{ minWidth: 120 }}
+          >
+            신규 부품 등록
+          </Button>
+        )}
       </Box>
 
       {success && (
@@ -174,23 +230,40 @@ const PartsManagement: React.FC = () => {
         </Alert>
       )}
 
-      {/* 검색 필터 */}
+      {/* 검색 및 필터 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="품명, 품번, 품목그룹으로 검색..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              variant="outlined"
+              placeholder="품명, 품번, 품목그룹으로 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ minWidth: 300 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl sx={{ minWidth: 150 }}>
+              <InputLabel>카테고리</InputLabel>
+              <Select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                label="카테고리"
+              >
+                <MenuItem value="all">전체</MenuItem>
+                {categories.map(category => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
         </CardContent>
       </Card>
 
@@ -198,7 +271,7 @@ const PartsManagement: React.FC = () => {
       <Card>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            등록된 부품 목록 ({filteredParts.length}개)
+            {userProfile?.role === 'operations' ? '등록된 부품 목록' : '등록된 부품 목록'} ({filteredParts.length}개)
           </Typography>
           
           {loading ? (
@@ -222,7 +295,7 @@ const PartsManagement: React.FC = () => {
                   {filteredParts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                        {searchTerm ? '검색 결과가 없습니다.' : '등록된 부품이 없습니다.'}
+                        {searchTerm || categoryFilter !== 'all' ? '검색 결과가 없습니다.' : '등록된 부품이 없습니다.'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -267,9 +340,21 @@ const PartsManagement: React.FC = () => {
                           <IconButton size="small" color="primary">
                             <VisibilityIcon />
                           </IconButton>
-                          <IconButton size="small" color="secondary">
-                            <EditIcon />
-                          </IconButton>
+                          {userProfile?.role === 'admin' && (
+                            <IconButton size="small" color="secondary">
+                              <EditIcon />
+                            </IconButton>
+                          )}
+                          {userProfile?.role === 'operations' && (
+                            <IconButton 
+                              size="small" 
+                              color="success"
+                              onClick={() => handleReorder(part)}
+                              title="재주문 요청"
+                            >
+                              <ShoppingCartIcon />
+                            </IconButton>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -281,78 +366,77 @@ const PartsManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 신규 부품 등록 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>신규 부품 등록</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+      {/* 신규 부품 등록 다이얼로그 (관리자만) */}
+      {userProfile?.role === 'admin' && (
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle>신규 부품 등록</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  label="품번 *"
+                  value={newPart.partNumber}
+                  onChange={(e) => setNewPart({ ...newPart, partNumber: e.target.value })}
+                />
+                <TextField
+                  fullWidth
+                  label="품명 *"
+                  value={newPart.name}
+                  onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+                />
+              </Box>
               <TextField
                 fullWidth
-                label="품번 *"
-                value={newPart.partNumber}
-                onChange={(e) => setNewPart({ ...newPart, partNumber: e.target.value })}
+                label="상품 관련 메모"
+                multiline
+                rows={3}
+                value={newPart.description}
+                onChange={(e) => setNewPart({ ...newPart, description: e.target.value })}
               />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <ItemGroupAutocomplete
+                  groupLevel={1}
+                  value={newPart.itemGroup1}
+                  onChange={(value) => setNewPart({ ...newPart, itemGroup1: value })}
+                />
+                <ItemGroupAutocomplete
+                  groupLevel={2}
+                  value={newPart.itemGroup2}
+                  onChange={(value) => setNewPart({ ...newPart, itemGroup2: value })}
+                />
+                <ItemGroupAutocomplete
+                  groupLevel={3}
+                  value={newPart.itemGroup3}
+                  onChange={(value) => setNewPart({ ...newPart, itemGroup3: value })}
+                />
+              </Box>
               <TextField
                 fullWidth
-                label="품명 *"
-                value={newPart.name}
-                onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+                label="가격"
+                type="number"
+                value={priceInput.value}
+                onChange={(e) => priceInput.handleChange(e.target.value)}
+                onFocus={priceInput.handleFocus}
+                onBlur={priceInput.handleBlur}
+                InputProps={{
+                  endAdornment: '원'
+                }}
               />
             </Box>
-            <TextField
-              fullWidth
-              label="상품 관련 메모"
-              multiline
-              rows={3}
-              value={newPart.description}
-              onChange={(e) => setNewPart({ ...newPart, description: e.target.value })}
-            />
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                fullWidth
-                label="품목 그룹 1"
-                value={newPart.itemGroup1}
-                onChange={(e) => setNewPart({ ...newPart, itemGroup1: e.target.value })}
-              />
-              <TextField
-                fullWidth
-                label="품목 그룹 2"
-                value={newPart.itemGroup2}
-                onChange={(e) => setNewPart({ ...newPart, itemGroup2: e.target.value })}
-              />
-              <TextField
-                fullWidth
-                label="품목 그룹 3"
-                value={newPart.itemGroup3}
-                onChange={(e) => setNewPart({ ...newPart, itemGroup3: e.target.value })}
-              />
-            </Box>
-            <TextField
-              fullWidth
-              label="가격"
-              type="number"
-              value={priceInput.value}
-              onChange={(e) => priceInput.handleChange(e.target.value)}
-              onFocus={priceInput.handleFocus}
-              onBlur={priceInput.handleBlur}
-              InputProps={{
-                endAdornment: '원'
-              }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button 
-            onClick={handleSubmit} 
-            variant="contained"
-            disabled={submitLoading}
-          >
-            {submitLoading ? <CircularProgress size={20} /> : '등록'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenDialog(false)}>취소</Button>
+            <Button 
+              onClick={handleSubmit} 
+              variant="contained"
+              disabled={submitLoading}
+            >
+              {submitLoading ? <CircularProgress size={20} /> : '등록'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 };

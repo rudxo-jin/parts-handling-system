@@ -326,10 +326,6 @@ const PurchaseRequests: React.FC = () => {
             // 물류 처리 대기: 물류팀이 실제로 처리해야 할 단계의 요청만
             matchesFilter = ['operations_submitted', 'po_completed', 'warehouse_received'].includes(request.currentStatus);
             break;
-          case 'in-progress':
-            // 물류 처리 중: 운영부 관점에서 물류팀이 처리하고 있는 상태
-            matchesFilter = ['po_completed', 'warehouse_received'].includes(request.currentStatus);
-            break;
           case 'urgent':
             // 새로운 긴급 처리 조건들
             let isUrgentCase = false;
@@ -518,15 +514,6 @@ const PurchaseRequests: React.FC = () => {
 
   // 빠른 입력 Dialog 열기
   const handleQuickInput = (request: PurchaseRequest) => {
-    // 운영담당자 권한 확인 - 중간 과정 모든 단계 접근 불가
-    if (userProfile?.role === 'operations') {
-      const middleProcessStatuses = ['operations_submitted', 'po_completed', 'warehouse_received', 'partial_dispatched'];
-      if (middleProcessStatuses.includes(request.currentStatus)) {
-        setError('운영담당자는 중간 처리 과정에 개입할 수 없습니다. 물류팀에서 처리 후 최종 확인 단계에서 투입됩니다.');
-        return;
-      }
-    }
-    
     setQuickInputRequest(request);
     
     if (request.currentStatus === 'operations_submitted') {
@@ -743,53 +730,20 @@ const PurchaseRequests: React.FC = () => {
   const canBulkProcess = () => {
     if (selectedRequestIds.size === 0) return false;
     
-    const selectedRequests = requests.filter(req => selectedRequestIds.has(req.id));
+    const selectedRequests = filteredRequests.filter(req => selectedRequestIds.has(req.id));
     if (selectedRequests.length === 0) return false;
     
-    // 운영담당자는 일괄처리 완전 금지
-    if (userProfile?.role === 'operations') {
-      return false;
-    }
-    
-    // 모든 선택된 요청이 같은 상태인지 확인
+    // 선택된 모든 요청이 같은 상태여야 함
     const firstStatus = selectedRequests[0].currentStatus;
-    const allSameStatus = selectedRequests.every(req => req.currentStatus === firstStatus);
-    
-    if (!allSameStatus) return false;
-    
-    return true;
+    return selectedRequests.every(req => req.currentStatus === firstStatus);
   };
 
   // 🆕 일괄 처리 시작
   const handleBulkProcess = () => {
     if (!canBulkProcess()) {
-      // 운영담당자가 물류 관련 상태에 접근하려는 경우 완전 차단
-      if (userProfile?.role === 'operations') {
-        const selectedRequests = requests.filter(req => selectedRequestIds.has(req.id));
-        const firstStatus = selectedRequests[0]?.currentStatus;
-        const logisticsStatuses = ['po_completed', 'warehouse_received', 'partial_dispatched', 'branch_dispatched'];
-        
-        if (logisticsStatuses.includes(firstStatus)) {
-          setError('운영담당자는 물류 관련 상태의 일괄 처리에 접근할 수 없습니다. 물류팀에서 처리해야 합니다.');
-          return; // Dialog를 열지 않고 완전히 차단
-        }
-      }
       setError('선택된 항목들이 모두 같은 상태여야 일괄 처리가 가능합니다.');
-      return; // Dialog를 열지 않고 완전히 차단
+      return;
     }
-    
-    // 추가 검증: 운영담당자의 물류 관련 상태 접근 완전 차단
-    const selectedRequests = requests.filter(req => selectedRequestIds.has(req.id));
-    if (userProfile?.role === 'operations' && selectedRequests.length > 0) {
-      const firstStatus = selectedRequests[0].currentStatus;
-      const logisticsStatuses = ['po_completed', 'warehouse_received', 'partial_dispatched', 'branch_dispatched'];
-      
-      if (logisticsStatuses.includes(firstStatus)) {
-        setError('운영담당자는 물류 관련 업무에 접근할 수 없습니다.');
-        return; // Dialog를 열지 않고 완전히 차단
-      }
-    }
-    
     setBulkProcessOpen(true);
   };
 
@@ -951,12 +905,7 @@ const PurchaseRequests: React.FC = () => {
             <Box sx={{ mt: 2, p: 1, bgcolor: 'info.50', borderRadius: 1, border: '1px solid', borderColor: 'info.200' }}>
               <Typography variant="body2" color="info.main">
                 📋 {selectedRequestIds.size}개 항목이 선택되었습니다. 
-                {userProfile?.role === 'operations' 
-                  ? ' 운영담당자는 일괄 처리 기능을 사용할 수 없습니다.'
-                  : canBulkProcess() 
-                    ? ' 일괄 처리가 가능합니다.'
-                    : ' 같은 상태의 항목만 일괄 처리할 수 있습니다.'
-                }
+                {canBulkProcess() ? ' 일괄 처리가 가능합니다.' : ' 같은 상태의 항목만 일괄 처리할 수 있습니다.'}
               </Typography>
             </Box>
           )}
@@ -974,7 +923,6 @@ const PurchaseRequests: React.FC = () => {
                       label={
                         urlFilter === 'overdue' ? '지연된 요청' :
                         urlFilter === 'awaiting-logistics' ? '처리 대기' :
-                        urlFilter === 'in-progress' ? '물류 처리 중' :
                         urlFilter === 'urgent' ? '긴급 요청' : urlFilter
                       }
                       color="warning"
@@ -1371,7 +1319,7 @@ const PurchaseRequests: React.FC = () => {
           <Box component="ul" sx={{ pl: 2, m: 0 }}>
             {userProfile?.role === 'operations' && (
               <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                귀하가 생성한 구매 요청들만 표시됩니다. 구매요청 작성 후 물류팀에서 중간 과정을 처리하며, 최종 지점 입고 확인 단계에서 재투입됩니다.
+                귀하가 생성한 구매 요청들만 표시됩니다.
               </Typography>
             )}
             {userProfile?.role === 'logistics' && (
@@ -1387,19 +1335,15 @@ const PurchaseRequests: React.FC = () => {
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               <strong>테이블 헤더를 클릭</strong>하면 해당 필드로 정렬할 수 있습니다. (요청 NO, 부품명, 총 수량, 진행 상태, 담당부서)
             </Typography>
-            {userProfile?.role === 'logistics' && (
-              <>
-                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  <strong>운영부 요청 완료 건을 클릭</strong>하면 입고예정일과 예정수량을 빠르게 입력할 수 있습니다. (▶️ 아이콘)
-                </Typography>
-                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  <strong>구매처 발주 완료 건을 클릭</strong>하면 실제입고일과 실제입고수량을 빠르게 입력할 수 있습니다. (▶️ 아이콘)
-                </Typography>
-                <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  <strong>물류창고 입고 완료 및 부분출고완료 건을 클릭</strong>하면 지점별 출고수량을 빠르게 입력할 수 있습니다. (▶️ 아이콘)
-                </Typography>
-              </>
-            )}
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>운영부 요청 완료 건을 클릭</strong>하면 입고예정일과 예정수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>구매처 발주 완료 건을 클릭</strong>하면 실제입고일과 실제입고수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
+            </Typography>
+            <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <strong>물류창고 입고 완료 및 부분출고완료 건을 클릭</strong>하면 지점별 출고수량을 빠르게 입력할 수 있습니다. (✏️ 아이콘)
+            </Typography>
             <Typography component="li" variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               <strong>전체 지점 출고 완료 이후 상태의 행을 클릭</strong>하면 상세 정보가 확장되고, 빠른 액션 버튼으로 다음 단계를 처리할 수 있습니다.
             </Typography>

@@ -6,15 +6,39 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout/Layout';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
-import PartsManagement from './pages/PartsManagement';
 import NewPartRequest from './pages/NewPartRequest';
 import MultiPartRequest from './pages/MultiPartRequest';
 import UserManagement from './pages/UserManagement';
 import BranchManagement from './pages/BranchManagement';
 import PurchaseRequests from './pages/PurchaseRequests';
-import NotificationTest from './pages/NotificationTest';
 import SimpleNotificationSettings from './components/SimpleNotificationSettings';
-import AdminTools from './pages/AdminTools';
+import AdminSettings from './pages/AdminSettings';
+import SystemTest from './components/SystemTest';
+import PerformanceDashboard from './components/PerformanceDashboard';
+import BundleAnalyzer from './components/BundleAnalyzer';
+import SecurityChecker from './components/SecurityChecker';
+import { GlobalLoadingOverlay } from './components/LoadingOverlay';
+import ToastContainer from './components/ToastContainer';
+import ConfirmDialog from './components/ConfirmDialog';
+import PWAInstall from './components/PWAInstall';
+
+// Service Worker 등록
+if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('[SW] Service Worker 등록 성공:', registration.scope);
+        
+        // 업데이트 확인
+        registration.addEventListener('updatefound', () => {
+          console.log('[SW] 새 Service Worker 발견');
+        });
+      })
+      .catch(error => {
+        console.log('[SW] Service Worker 등록 실패:', error);
+      });
+  });
+}
 
 // Material-UI 테마 설정
 const theme = createTheme({
@@ -83,11 +107,6 @@ const AppRoutes: React.FC = () => {
             <Dashboard />
           </ProtectedRoute>
         } />
-        <Route path="/parts" element={
-          <ProtectedRoute>
-            <PartsManagement />
-          </ProtectedRoute>
-        } />
         <Route path="/new-part-request" element={
           <ProtectedRoute>
             <NewPartRequest />
@@ -113,19 +132,34 @@ const AppRoutes: React.FC = () => {
             <BranchManagement />
           </ProtectedRoute>
         } />
-        <Route path="/admin/tools" element={
+        <Route path="/admin/settings" element={
           <ProtectedRoute>
-            <AdminTools />
+            <AdminSettings />
           </ProtectedRoute>
         } />
-        <Route path="/admin/notification-test" element={
+        <Route path="/admin/system-test" element={
           <ProtectedRoute>
-            <NotificationTest />
+            <SystemTest />
           </ProtectedRoute>
         } />
         <Route path="/settings/notifications" element={
           <ProtectedRoute>
             <SimpleNotificationSettings />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/performance" element={
+          <ProtectedRoute>
+            <PerformanceDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/bundle-analyzer" element={
+          <ProtectedRoute>
+            <BundleAnalyzer />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/security" element={
+          <ProtectedRoute>
+            <SecurityChecker />
           </ProtectedRoute>
         } />
         <Route path="*" element={<Navigate to="/dashboard" />} />
@@ -142,6 +176,12 @@ const App: React.FC = () => {
         <Router>
           <Box sx={{ display: 'flex', minHeight: '100vh' }}>
             <AppRoutes />
+            
+            {/* 전역 UI 컴포넌트들 */}
+            <GlobalLoadingOverlay />
+            <ToastContainer />
+            <ConfirmDialog />
+            <PWAInstall />
           </Box>
         </Router>
       </AuthProvider>

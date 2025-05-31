@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1976d2" />
+    <meta name="description" content="부품 핸들링 시스템 - 오프라인" />
+    <title>부품 관리 시스템 - 오프라인</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 500px;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 300;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        .button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .status {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .online {
+            color: #4caf50;
+        }
+
+        .offline {
+            color: #f44336;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            p {
+                font-size: 1rem;
+            }
+
+            .button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="icon pulse">📡</div>
+        <h1>오프라인 상태</h1>
+        <p>
+            인터넷 연결을 확인할 수 없습니다.<br>
+            네트워크 연결을 확인한 후 다시 시도해주세요.
+        </p>
+        
+        <a href="/" class="button" onclick="checkConnection()">다시 연결</a>
+        <button class="button" onclick="location.reload()">새로고침</button>
+        
+        <div class="status">
+            <div id="connection-status">연결 상태 확인 중...</div>
+            <div id="last-update">마지막 업데이트: <span id="timestamp">--</span></div>
+        </div>
+    </div>
+
+    <script>
+        // 연결 상태 확인
+        function updateConnectionStatus() {
+            const status = document.getElementById('connection-status');
+            const timestamp = document.getElementById('timestamp');
+            
+            if (navigator.onLine) {
+                status.innerHTML = '<span class="online">🟢 온라인</span>';
+            } else {
+                status.innerHTML = '<span class="offline">🔴 오프라인</span>';
+            }
+            
+            timestamp.textContent = new Date().toLocaleTimeString('ko-KR');
+        }
+
+        // 연결 재시도
+        function checkConnection() {
+            if (navigator.onLine) {
+                // 실제 네트워크 테스트
+                fetch('/', { method: 'HEAD', cache: 'no-cache' })
+                    .then(() => {
+                        window.location.href = '/';
+                    })
+                    .catch(() => {
+                        alert('아직 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');
+                    });
+            } else {
+                alert('인터넷 연결을 확인해주세요.');
+            }
+        }
+
+        // 이벤트 리스너
+        window.addEventListener('online', () => {
+            updateConnectionStatus();
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        });
+
+        window.addEventListener('offline', updateConnectionStatus);
+
+        // 주기적 상태 업데이트
+        setInterval(updateConnectionStatus, 30000);
+        
+        // 초기 상태 설정
+        updateConnectionStatus();
+
+        // Service Worker 메시지 수신
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data && event.data.type === 'CACHE_UPDATED') {
+                    const status = document.getElementById('connection-status');
+                    status.innerHTML = '<span class="online">🔄 업데이트됨</span>';
+                }
+            });
+        }
+
+        // 키보드 단축키
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+                e.preventDefault();
+                location.reload();
+            }
+            if (e.key === 'Enter' || e.key === ' ') {
+                checkConnection();
+            }
+        });
+    </script>
+</body>
+</html> 

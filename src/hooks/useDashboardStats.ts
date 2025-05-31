@@ -20,6 +20,16 @@ interface RoleSpecificStats {
   myRequests?: number;
   urgentRequests?: number;
   recentRequests?: PurchaseRequest[];
+  // 새로운 운영부 통계 추가
+  monthlyRequests?: number;
+  avgCompletionTime?: number;
+  requestAccuracy?: number;
+  awaitingConfirmation?: number;
+  inProgress?: number;
+  completed?: number;
+  operationsWaiting?: number; // 운영부 요청 완료 → 물류팀 처리 대기
+  operationsPoCompleted?: number; // 운영부용 po_completed 건수
+  operationsWarehouseReceived?: number; // 운영부용 warehouse_received 건수
   
   // 유통사업본부용
   awaitingLogistics?: number;
@@ -28,6 +38,13 @@ interface RoleSpecificStats {
   todayCompleted?: number;
   weeklyDispatched?: number;
   avgProcessingTime?: number;
+  monthlyCompleted?: number;
+  monthlyDispatched?: number;
+  // 단계별 실제 건수
+  operationsSubmitted?: number;
+  poCompleted?: number;
+  warehouseReceived?: number;
+  branchDispatched?: number;
   
   // 관리자용
   systemHealth?: {
@@ -90,11 +107,37 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
             let monthlyDispatched = 0;
             let totalProcessingDays = 0;
             let completedRequestsCount = 0;
+            
+            // 단계별 실제 건수
+            let operationsSubmittedCount = 0;
+            let poCompletedCount = 0;
+            let warehouseReceivedCount = 0;
+            let branchDispatchedCount = 0;
+
+            // 운영부 새로운 통계 변수들
+            let monthlyRequestsCount = 0;
+            let operationsCompletionDays = 0;
+            let operationsCompletedCount = 0;
+            let accurateRequestsCount = 0;
+            let totalRequestsForAccuracy = 0;
+            let awaitingConfirmationCount = 0;
+            let inProgressCount = 0;
+            let completedCount = 0;
+            let operationsWaitingCount = 0; // 운영부용 operations_submitted 건수
+            let operationsPoCompletedCount = 0; // 운영부용 po_completed 건수
+            let operationsWarehouseReceivedCount = 0; // 운영부용 warehouse_received 건수
 
             const now = new Date();
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); // 이번 달 시작일
             const recentRequests: PurchaseRequest[] = [];
 
+            // 관리자용 통계 (모든 사용자 데이터)
+            let adminCompletedCount = 0;
+            let adminOperationsSubmittedCount = 0;
+            let adminPoCompletedCount = 0;
+            let adminWarehouseReceivedCount = 0;
+            let adminBranchDispatchedCount = 0;
+            
             snapshot.docs.forEach(doc => {
               const data = doc.data();
               const status = data.currentStatus;
@@ -106,6 +149,7 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
               const requestDate = data.requestDate ? safeToDate(data.requestDate) : null;
               const updatedAt = data.updatedAt ? safeToDate(data.updatedAt) : null;
               const warehouseReceiptAt = data.warehouseReceiptAt ? safeToDate(data.warehouseReceiptAt) : null;
+              const branchReceiptConfirmedAt = data.branchReceiptConfirmedAt ? safeToDate(data.branchReceiptConfirmedAt) : null;
               
               // 기본 통계
               if (status === 'operations_submitted') {
@@ -123,6 +167,49 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
               if (userRole === 'operations' && userId) {
                 if (requestorUid === userId) {
                   myRequests++;
+                  
+                  // 이달 요청 건수 (요청일 기준)
+                  if (requestDate && requestDate >= monthStart) {
+                    monthlyRequestsCount++;
+                  }
+                  
+                  // 단계별 분류
+                  if (status === 'operations_submitted') {
+                    operationsWaitingCount++; // 물류팀 처리 대기
+                  } else if (['po_completed', 'warehouse_received'].includes(status)) {
+                    inProgressCount++; // 물류 처리 중
+                    
+                    // 운영부용 세부 단계별 카운트
+                    if (status === 'po_completed') {
+                      operationsPoCompletedCount++;
+                    } else if (status === 'warehouse_received') {
+                      operationsWarehouseReceivedCount++;
+                    }
+                  } else if (status === 'branch_dispatched') {
+                    awaitingConfirmationCount++; // 지점 입고 확인 필요
+                  } else if (status === 'branch_received_confirmed') {
+                    completedCount++; // 완료
+                    
+                    // 완료 시간 계산 (운영부 관점)
+                    if (requestDate && branchReceiptConfirmedAt) {
+                      const completionDays = Math.ceil((branchReceiptConfirmedAt.getTime() - requestDate.getTime()) / (1000 * 60 * 60 * 24));
+                      operationsCompletionDays += completionDays;
+                      operationsCompletedCount++;
+                    }
+                  }
+                  
+                  // 요청 정확도 계산 (완료된 요청만)
+                  if (status === 'branch_received_confirmed') {
+                    totalRequestsForAccuracy++;
+                    const originalQuantity = data.totalRequestedQuantity || 0;
+                    const finalQuantity = data.branchDispatchQuantities?.reduce((sum: number, branch: any) => 
+                      sum + (branch.confirmedQuantity || branch.dispatchedQuantity || 0), 0) || 0;
+                    
+                    // 원래 요청 수량과 최종 확인 수량이 일치하면 정확한 요청
+                    if (Math.abs(originalQuantity - finalQuantity) <= originalQuantity * 0.05) { // 5% 오차 허용
+                      accurateRequestsCount++;
+                    }
+                  }
                   
                   // 최근 요청 (최대 5개)
                   if (recentRequests.length < 5) {
@@ -144,15 +231,41 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
                   awaitingLogistics++;
                 }
 
-                // 지연된 요청들 (입고 예정일이 지난 것들, 종료된 프로세스 제외)
-                // 실제 입고일이 있으면 그 날짜를 기준으로, 없으면 현재 날짜를 기준으로 판단
-                // 입고가 완료된 요청은 지연 대상에서 제외
+                // 새로운 긴급처리 조건들
+                let isUrgentCase = false;
+                
+                // 1. 긴급 요청으로 표시된 경우
+                if (importance === 'urgent' && status !== 'branch_received_confirmed' && status !== 'process_terminated') {
+                  isUrgentCase = true;
+                }
+                
+                // 2. 운영부 요청완료 후 24시간 경과한 경우
+                if (status === 'operations_submitted' && updatedAt) {
+                  const hoursSinceSubmission = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+                  if (hoursSinceSubmission > 24) {
+                    isUrgentCase = true;
+                  }
+                }
+                
+                // 3. 입고예정일을 넘긴 경우 (입고 완료되지 않은 경우만)
                 if (expectedDeliveryDate && 
-                    expectedDeliveryDate < (warehouseReceiptAt || now) && 
+                    expectedDeliveryDate < now && 
                     status !== 'branch_received_confirmed' && 
                     status !== 'process_terminated' &&
-                    !warehouseReceiptAt) { // 입고 완료된 요청은 제외
-                  overdue++;
+                    !warehouseReceiptAt) {
+                  isUrgentCase = true;
+                }
+                
+                // 4. 입고완료 후 출고가 3일 이상 지연되는 경우
+                if (status === 'warehouse_received' && warehouseReceiptAt) {
+                  const daysSinceReceipt = (now.getTime() - warehouseReceiptAt.getTime()) / (1000 * 60 * 60 * 24);
+                  if (daysSinceReceipt > 3) {
+                    isUrgentCase = true;
+                  }
+                }
+                
+                if (isUrgentCase) {
+                  overdue++; // 긴급처리 건수로 사용
                 }
                 
                 // 이달 처리 완료된 요청들 (상태가 변경된 날짜 기준)
@@ -172,13 +285,49 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
                   totalProcessingDays += processingDays;
                   completedRequestsCount++;
                 }
+
+                // 단계별 실제 건수
+                if (status === 'operations_submitted') {
+                  operationsSubmittedCount++;
+                } else if (status === 'po_completed') {
+                  poCompletedCount++;
+                } else if (status === 'warehouse_received') {
+                  warehouseReceivedCount++;
+                } else if (status === 'branch_dispatched') {
+                  branchDispatchedCount++;
+                }
+              }
+
+              // 관리자용 전체 단계별 통계 계산
+              if (userRole === 'admin') {
+                if (status === 'operations_submitted') {
+                  adminOperationsSubmittedCount++;
+                } else if (status === 'po_completed') {
+                  adminPoCompletedCount++;
+                } else if (status === 'warehouse_received') {
+                  adminWarehouseReceivedCount++;
+                } else if (status === 'branch_dispatched') {
+                  adminBranchDispatchedCount++;
+                } else if (status === 'branch_received_confirmed') {
+                  adminCompletedCount++;
+                }
               }
             });
 
-            // 평균 처리시간 계산
+            // 평균 처리시간 계산 (물류팀용)
             const avgProcessingTime = completedRequestsCount > 0 
               ? Math.round((totalProcessingDays / completedRequestsCount) * 10) / 10 
               : 2.3; // 기본값
+
+            // 운영부 평균 완료시간 계산
+            const avgCompletionTime = operationsCompletedCount > 0 
+              ? Math.round((operationsCompletionDays / operationsCompletedCount) * 10) / 10 
+              : 0; // 기본값을 0으로 변경
+
+            // 운영부 요청 정확도 계산
+            const requestAccuracy = totalRequestsForAccuracy > 0 
+              ? Math.round((accurateRequestsCount / totalRequestsForAccuracy) * 1000) / 10 
+              : 0; // 기본값을 0으로 변경
 
             // 최근 요청을 날짜순으로 정렬
             recentRequests.sort((a, b) => 
@@ -193,11 +342,36 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
               urgentRequests: urgent,
               myRequests,
               recentRequests,
+              // 운영부 새로운 통계
+              monthlyRequests: monthlyRequestsCount,
+              avgCompletionTime,
+              requestAccuracy,
+              awaitingConfirmation: awaitingConfirmationCount,
+              inProgress: inProgressCount,
+              completed: completedCount,
+              operationsWaiting: operationsWaitingCount,
+              operationsPoCompleted: operationsPoCompletedCount,
+              operationsWarehouseReceived: operationsWarehouseReceivedCount,
+              // 물류팀 통계
               awaitingLogistics,
               overdueRequests: overdue,
+              avgProcessingTime,
               todayCompleted: monthlyCompleted,
               weeklyDispatched: monthlyDispatched,
-              avgProcessingTime,
+              monthlyCompleted,
+              monthlyDispatched,
+              operationsSubmitted: operationsSubmittedCount,
+              poCompleted: poCompletedCount,
+              warehouseReceived: warehouseReceivedCount,
+              branchDispatched: branchDispatchedCount,
+              // 관리자용 완료 건수 추가
+              ...(userRole === 'admin' && { 
+                completed: adminCompletedCount,
+                operationsSubmitted: adminOperationsSubmittedCount,
+                poCompleted: adminPoCompletedCount,
+                warehouseReceived: adminWarehouseReceivedCount,
+                branchDispatched: adminBranchDispatchedCount,
+              }),
             }));
           },
           (error) => {
@@ -214,14 +388,14 @@ export const useDashboardStats = (userRole: UserRole | undefined, userId?: strin
             query(collection(db, 'users'), where('isActive', '==', true)),
             (snapshot) => {
               const activeUsers = snapshot.size;
+              
               setStats(prev => ({ 
                 ...prev, 
                 totalUsers: activeUsers,
                 systemHealth: {
-                  ...prev.systemHealth,
                   activeUsers,
-                  todayActivity: Math.floor(Math.random() * 50), // 임시 데이터
-                  errorRate: Math.random() * 5, // 임시 데이터
+                  todayActivity: prev.operationsSubmitted || 0, // 오늘 제출된 요청 수 사용
+                  errorRate: 0, // 실제 에러 추적 시스템이 없으므로 0으로 설정
                 }
               }));
             },

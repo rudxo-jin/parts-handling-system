@@ -196,6 +196,7 @@ export const createMultiPartRequest = async (
         // 세트 관련 필드
         setId,
         setName: setData.setName,
+        setDescription: setData.setDescription,
         isPartOfSet: true,
         partOrderInSet: i + 1,
         

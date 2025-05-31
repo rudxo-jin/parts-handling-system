@@ -73,6 +73,11 @@ export interface PurchaseRequest {
   requestorName: string;
   requestDate: Date;
   importance: 'low' | 'medium' | 'high' | 'urgent';
+  
+  // 부품 상세 정보 (신규 추가)
+  partDescription?: string;         // 부품 설명/메모
+  partImages?: string[];            // 부품 이미지 URL 목록
+  
   branchRequirements: BranchRequirement[];
   logisticsStockQuantity: number;
   totalRequestedQuantity: number;
@@ -83,6 +88,7 @@ export interface PurchaseRequest {
   // 세트 관련 필드 (신규 추가)
   setId?: string;                   // 세트에 속한 경우
   setName?: string;                 // 세트명 (표시용)
+  setDescription?: string;          // 세트 설명 (표시용)
   isPartOfSet: boolean;             // 세트 부품 여부 (기본값: false)
   partOrderInSet?: number;          // 세트 내 순서
   

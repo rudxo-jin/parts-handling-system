@@ -39,6 +39,7 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   CloudUpload as CloudUploadIcon,
+  ViewList as ViewListIcon,
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -53,11 +54,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { Branch, BranchRequirement } from '../types';
 import { useNumberInput } from '../hooks/useNumberInput';
 import { notificationService } from '../services/notificationService';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import ItemGroupAutocomplete from '../components/ItemGroupAutocomplete';
+import { recordMultipleItemGroupUsage } from '../services/itemGroupService';
 
 const steps = ['부품 정보 입력', '첫 구매 요청 정보'];
 
 const NewPartRequest: React.FC = () => {
   const { userProfile } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -89,7 +95,6 @@ const NewPartRequest: React.FC = () => {
 
   // 구매 요청 정보
   const [purchaseRequestInfo, setPurchaseRequestInfo] = useState({
-    importance: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     supplier: '',
     branchRequirements: [] as BranchRequirement[],
     notes: '',
@@ -98,11 +103,44 @@ const NewPartRequest: React.FC = () => {
   // 다중 지점 선택 Dialog 상태
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  
+  // 메모 입력 Dialog 상태
+  const [memoDialogOpen, setMemoDialogOpen] = useState(false);
 
   // 숫자 입력 필드들을 위한 커스텀 훅들
   const priceInput = useNumberInput({ initialValue: 0, defaultValue: 0 });
   const logisticsStockInput = useNumberInput({ initialValue: 0, defaultValue: 0 });
   const commonQuantityInput = useNumberInput({ initialValue: 1, defaultValue: 1 });
+
+  // URL 파라미터에서 부품 정보 로드
+  useEffect(() => {
+    const partNumber = searchParams.get('partNumber');
+    const name = searchParams.get('name');
+    const itemGroup1 = searchParams.get('itemGroup1');
+    const itemGroup2 = searchParams.get('itemGroup2');
+    const itemGroup3 = searchParams.get('itemGroup3');
+    const price = searchParams.get('price');
+    const description = searchParams.get('description');
+
+    if (partNumber || name) {
+      setPartInfo({
+        partNumber: partNumber || '',
+        name: name || '',
+        itemGroup1: itemGroup1 || '',
+        itemGroup2: itemGroup2 || '',
+        itemGroup3: itemGroup3 || '',
+        description: description || '',
+        images: [],
+      });
+
+      if (price) {
+        priceInput.setValue(Number(price));
+      }
+
+      // URL 파라미터 정리
+      navigate('/new-part-request', { replace: true });
+    }
+  }, [searchParams, navigate, priceInput]);
 
   // 지점 목록 가져오기
   const fetchBranches = async () => {
@@ -374,6 +412,13 @@ const NewPartRequest: React.FC = () => {
 
       const partDocRef = await addDoc(collection(db, 'parts'), partData);
 
+      // 품목그룹 사용 기록 저장
+      await recordMultipleItemGroupUsage(
+        partInfo.itemGroup1,
+        partInfo.itemGroup2,
+        partInfo.itemGroup3
+      );
+
       // 2. 구매 요청 등록
       const requestId = await generateRequestId();
       const totalQuantity = calculateTotalQuantity();
@@ -404,7 +449,12 @@ const NewPartRequest: React.FC = () => {
         requestorUid: userProfile?.id || '',
         requestorName: userProfile?.name || '',
         requestDate: Timestamp.now(),
-        importance: purchaseRequestInfo.importance,
+        importance: 'medium',
+        
+        // 부품 상세 정보
+        partDescription: partInfo.description,
+        // partImages는 향후 이미지 업로드 기능 구현 시 추가
+        
         branchRequirements: purchaseRequestInfo.branchRequirements.map(req => ({
           ...req,
           requestedQuantity: typeof req.requestedQuantity === 'string' 
@@ -444,7 +494,7 @@ const NewPartRequest: React.FC = () => {
             requestDocRef.id,
             userProfile?.name || '알 수 없는 사용자',
             partInfo.name,
-            purchaseRequestInfo.importance,
+            'medium',
             userProfile?.id
           );
           
@@ -453,23 +503,6 @@ const NewPartRequest: React.FC = () => {
             partName: partInfo.name,
             recipients: logisticsUsers.length
           });
-        }
-
-        // 긴급 요청인 경우 추가 알림
-        if (purchaseRequestInfo.importance === 'urgent') {
-          const allUsers = await notificationService.getUsersByRole('admin');
-          const allTargetUsers = [...logisticsUsers, ...allUsers];
-          
-          await notificationService.notifyUrgentRequest(
-            requestDocRef.id,
-            userProfile?.name || '알 수 없는 사용자',
-            userProfile?.phone || '연락처 없음',
-            partInfo.name,
-            purchaseRequestInfo.notes || '긴급 처리 요청',
-            allTargetUsers
-          );
-          
-          console.log('🚨 긴급 요청 알림 발송 완료');
         }
       } catch (notificationError) {
         console.error('알림 발송 실패 (업무 처리는 정상 완료):', notificationError);
@@ -490,7 +523,6 @@ const NewPartRequest: React.FC = () => {
         images: [],
       });
       setPurchaseRequestInfo({
-        importance: 'medium',
         supplier: '',
         branchRequirements: [],
         notes: '',
@@ -525,9 +557,19 @@ const NewPartRequest: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold' }}>
-        신규 부품 등록 및 첫 구매 요청
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+          신규 부품 등록 및 첫 구매 요청
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<ViewListIcon />}
+          onClick={() => navigate('/multi-part-request')}
+          sx={{ minWidth: 160 }}
+        >
+          다중 부품 등록
+        </Button>
+      </Box>
 
       {success && (
         <Alert 
@@ -571,6 +613,7 @@ const NewPartRequest: React.FC = () => {
               부품 정보 입력
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* 품번, 품명, 판매가 - 3열 배치 */}
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
                   fullWidth
@@ -590,58 +633,62 @@ const NewPartRequest: React.FC = () => {
                   inputRef={nameRef}
                   onKeyDown={(e) => handleKeyDown(e, priceRef)}
                 />
+                <TextField
+                  fullWidth
+                  label="판매가"
+                  type="number"
+                  value={priceInput.value}
+                  onChange={(e) => priceInput.handleChange(e.target.value)}
+                  InputProps={{
+                    endAdornment: '원'
+                  }}
+                  inputRef={priceRef}
+                  onFocus={priceInput.handleFocus}
+                  onBlur={priceInput.handleBlur}
+                  onKeyDown={(e) => handleKeyDown(e, itemGroup1Ref)}
+                />
               </Box>
-              
-              <TextField
-                fullWidth
-                label="판매가"
-                type="number"
-                value={priceInput.value}
-                onChange={(e) => priceInput.handleChange(e.target.value)}
-                InputProps={{
-                  endAdornment: '원'
-                }}
-                inputRef={priceRef}
-                onFocus={priceInput.handleFocus}
-                onBlur={priceInput.handleBlur}
-                onKeyDown={(e) => handleKeyDown(e, itemGroup1Ref)}
-              />
 
+              {/* 품목그룹 - 3열 배치 */}
               <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  fullWidth
-                  label="품목 그룹 1"
+                <ItemGroupAutocomplete
+                  groupLevel={1}
                   value={partInfo.itemGroup1}
-                  onChange={(e) => setPartInfo({ ...partInfo, itemGroup1: e.target.value })}
-                  placeholder="예: 엔진부품"
-                  inputRef={itemGroup1Ref}
-                  onKeyDown={(e) => handleKeyDown(e, itemGroup2Ref)}
+                  onChange={(value) => setPartInfo({ ...partInfo, itemGroup1: value })}
+                  textFieldProps={{
+                    fullWidth: true,
+                    inputRef: itemGroup1Ref,
+                    onKeyDown: (e) => handleKeyDown(e, itemGroup2Ref),
+                  }}
                 />
-                <TextField
-                  fullWidth
-                  label="품목 그룹 2"
+                <ItemGroupAutocomplete
+                  groupLevel={2}
                   value={partInfo.itemGroup2}
-                  onChange={(e) => setPartInfo({ ...partInfo, itemGroup2: e.target.value })}
-                  placeholder="예: 브레이크"
-                  inputRef={itemGroup2Ref}
-                  onKeyDown={(e) => handleKeyDown(e, itemGroup3Ref)}
+                  onChange={(value) => setPartInfo({ ...partInfo, itemGroup2: value })}
+                  textFieldProps={{
+                    fullWidth: true,
+                    inputRef: itemGroup2Ref,
+                    onKeyDown: (e) => handleKeyDown(e, itemGroup3Ref),
+                  }}
                 />
-                <TextField
-                  fullWidth
-                  label="품목 그룹 3"
+                <ItemGroupAutocomplete
+                  groupLevel={3}
                   value={partInfo.itemGroup3}
-                  onChange={(e) => setPartInfo({ ...partInfo, itemGroup3: e.target.value })}
-                  placeholder="예: 패드"
-                  inputRef={itemGroup3Ref}
-                  onKeyDown={(e) => handleKeyDown(e, descriptionRef)}
+                  onChange={(value) => setPartInfo({ ...partInfo, itemGroup3: value })}
+                  textFieldProps={{
+                    fullWidth: true,
+                    inputRef: itemGroup3Ref,
+                    onKeyDown: (e) => handleKeyDown(e, descriptionRef),
+                  }}
                 />
               </Box>
 
+              {/* 상품 관련 메모 - 높이 축소 */}
               <TextField
                 fullWidth
                 label="상품 관련 메모"
                 multiline
-                rows={4}
+                rows={2}
                 value={partInfo.description}
                 onChange={(e) => setPartInfo({ ...partInfo, description: e.target.value })}
                 placeholder="부품에 대한 상세한 설명이나 특이사항을 입력하세요"
@@ -705,43 +752,6 @@ const NewPartRequest: React.FC = () => {
               첫 구매 요청 정보
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <FormControl fullWidth>
-                <InputLabel>중요도/긴급도</InputLabel>
-                <Select
-                  value={purchaseRequestInfo.importance}
-                  onChange={(e) => setPurchaseRequestInfo({ ...purchaseRequestInfo, importance: e.target.value as any })}
-                  label="중요도/긴급도"
-                  inputRef={importanceRef}
-                  onKeyDown={(e) => handleKeyDown(e, supplierRef)}
-                >
-                  <MenuItem value="low">낮음</MenuItem>
-                  <MenuItem value="medium">보통</MenuItem>
-                  <MenuItem value="high">높음</MenuItem>
-                  <MenuItem value="urgent">긴급</MenuItem>
-                </Select>
-              </FormControl>
-
-              <TextField
-                fullWidth
-                label="구매처"
-                value={purchaseRequestInfo.supplier}
-                onChange={(e) => setPurchaseRequestInfo({ ...purchaseRequestInfo, supplier: e.target.value })}
-                placeholder="추천하는 구매처를 입력하세요"
-                inputRef={supplierRef}
-                onKeyDown={(e) => handleKeyDown(e, notesRef)}
-              />
-
-              <TextField
-                fullWidth
-                label="요청 관련 메모"
-                multiline
-                rows={3}
-                value={purchaseRequestInfo.notes}
-                onChange={(e) => setPurchaseRequestInfo({ ...purchaseRequestInfo, notes: e.target.value })}
-                placeholder="특별한 요구사항이나 메모를 입력하세요"
-                inputRef={notesRef}
-              />
-
               {/* 지점별 필요수량 */}
               <Box>
                 <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium' }}>
@@ -757,64 +767,59 @@ const NewPartRequest: React.FC = () => {
                 </Button>
                 
                 {purchaseRequestInfo.branchRequirements.length > 0 && (
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>지점</TableCell>
-                          <TableCell>요청 수량</TableCell>
-                          <TableCell>작업</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {purchaseRequestInfo.branchRequirements.map((req, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <FormControl fullWidth size="small">
-                                <Select
-                                  value={req.branchId}
-                                  onChange={(e) => updateBranchRequirement(index, 'branchId', e.target.value)}
-                                >
-                                  {branches
-                                    .filter(branch => 
-                                      !purchaseRequestInfo.branchRequirements.some((r, i) => 
-                                        i !== index && r.branchId === branch.id
-                                      )
-                                    )
-                                    .map(branch => (
-                                      <MenuItem key={branch.id} value={branch.id}>
-                                        {branch.branchName}
-                                      </MenuItem>
-                                    ))
-                                  }
-                                </Select>
-                              </FormControl>
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={req.requestedQuantity}
-                                onChange={(e) => handleBranchQuantityChange(index, e.target.value)}
-                                onFocus={() => handleBranchQuantityFocus(index)}
-                                onBlur={(e) => handleBranchQuantityBlur(index, e.target.value)}
-                                sx={{ width: 100 }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <IconButton 
-                                size="small" 
-                                color="error"
-                                onClick={() => removeBranchRequirement(index)}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                    {purchaseRequestInfo.branchRequirements.map((req, index) => (
+                      <Box key={index} sx={{ 
+                        p: 2, 
+                        border: '1px solid', 
+                        borderColor: 'grey.300', 
+                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2
+                      }}>
+                        <FormControl sx={{ minWidth: 120 }} size="small">
+                          <Select
+                            value={req.branchId}
+                            onChange={(e) => updateBranchRequirement(index, 'branchId', e.target.value)}
+                            displayEmpty
+                          >
+                            {branches
+                              .filter(branch => 
+                                !purchaseRequestInfo.branchRequirements.some((r, i) => 
+                                  i !== index && r.branchId === branch.id
+                                )
+                              )
+                              .map(branch => (
+                                <MenuItem key={branch.id} value={branch.id}>
+                                  {branch.branchName}
+                                </MenuItem>
+                              ))
+                            }
+                          </Select>
+                        </FormControl>
+                        
+                        <TextField
+                          type="number"
+                          size="small"
+                          label="수량"
+                          value={req.requestedQuantity}
+                          onChange={(e) => handleBranchQuantityChange(index, e.target.value)}
+                          onFocus={() => handleBranchQuantityFocus(index)}
+                          onBlur={(e) => handleBranchQuantityBlur(index, e.target.value)}
+                          sx={{ width: 80 }}
+                        />
+                        
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => removeBranchRequirement(index)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
                 )}
               </Box>
 
@@ -843,6 +848,43 @@ const NewPartRequest: React.FC = () => {
                   }, 0)}개 + 
                   물류재고: {logisticsStockInput.getNumberValue()}개
                 </Typography>
+              </Box>
+
+              {/* 구매처와 요청 관련 메모 - 1:1 비율 배치 */}
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  sx={{ flex: 1 }}
+                  label="추천 구매처"
+                  value={purchaseRequestInfo.supplier}
+                  onChange={(e) => setPurchaseRequestInfo({ ...purchaseRequestInfo, supplier: e.target.value })}
+                  placeholder="추천하는 구매처를 입력하세요 (선택사항)"
+                  helperText="물류팀에서 참고할 추천 구매처가 있다면 입력해주세요"
+                  inputRef={supplierRef}
+                />
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
+                  <Button
+                    variant={purchaseRequestInfo.notes ? "contained" : "outlined"}
+                    color={purchaseRequestInfo.notes ? "primary" : "inherit"}
+                    onClick={() => setMemoDialogOpen(true)}
+                    sx={{ 
+                      height: 56, 
+                      justifyContent: 'flex-start',
+                      textAlign: 'left',
+                      px: 2
+                    }}
+                  >
+                    {purchaseRequestInfo.notes 
+                      ? `메모: ${purchaseRequestInfo.notes.substring(0, 30)}${purchaseRequestInfo.notes.length > 30 ? '...' : ''}`
+                      : '+ 요청 관련 메모 추가'
+                    }
+                  </Button>
+                  {purchaseRequestInfo.notes && (
+                    <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
+                      메모가 입력되었습니다. 클릭하여 수정할 수 있습니다.
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </Box>
           </CardContent>
@@ -955,6 +997,36 @@ const NewPartRequest: React.FC = () => {
             disabled={selectedBranchIds.length === 0}
           >
             선택한 지점 추가 ({selectedBranchIds.length}개, 각 {commonQuantityInput.getNumberValue()}개씩)
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 메모 입력 Dialog */}
+      <Dialog open={memoDialogOpen} onClose={() => setMemoDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          요청 관련 메모
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="요청 관련 메모"
+            multiline
+            rows={4}
+            value={purchaseRequestInfo.notes}
+            onChange={(e) => setPurchaseRequestInfo({ ...purchaseRequestInfo, notes: e.target.value })}
+            placeholder="특별한 요구사항이나 메모를 입력하세요"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMemoDialogOpen(false)}>
+            취소
+          </Button>
+          <Button 
+            onClick={() => setMemoDialogOpen(false)}
+            variant="contained"
+          >
+            저장
           </Button>
         </DialogActions>
       </Dialog>

@@ -21,7 +21,6 @@ import {
   Refresh as RefreshIcon,
   Warning as WarningIcon,
   BarChart as ChartIcon,
-  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboardStats } from '../hooks/useDashboardStats';
@@ -48,7 +47,7 @@ function TabPanel(props: TabPanelProps) {
       {...other}
     >
       {value === index && (
-        <Box sx={{ pt: 3 }}>
+        <Box sx={{ pt: 1 }}>
           {children}
         </Box>
       )}
@@ -108,18 +107,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-          대시보드
-        </Typography>
-        <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} disabled={stats.loading}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
-      </Box>
-      
-      <Typography variant="h6" sx={{ mb: 3, color: 'text.secondary' }}>
+      {/* 인사말 */}
+      <Typography variant="h6" sx={{ mb: 1, color: 'text.secondary' }}>
         안녕하세요, {userProfile?.name}님! 👋
       </Typography>
 
@@ -130,7 +119,7 @@ const Dashboard: React.FC = () => {
       {stats.error && (
         <Alert 
           severity="error" 
-          sx={{ mb: 3 }}
+          sx={{ mb: 1 }}
           action={
             <IconButton
               aria-label="새로고침"
@@ -147,19 +136,10 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* 통계 카드들 */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
-        {/* 공통 카드들 - 역할별로 다르게 표시 */}
-        {userProfile?.role !== 'logistics' && (
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 1 }}>
+        {/* 공통 카드들 - 운영담당자는 제외 */}
+        {userProfile?.role !== 'logistics' && userProfile?.role !== 'operations' && (
           <>
-            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-              <StatCard
-                title="등록된 부품"
-                value={stats.totalParts}
-                icon={<InventoryIcon />}
-                color="#1976d2"
-                loading={stats.loading}
-              />
-            </Box>
             <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
               <StatCard
                 title="전체 구매 요청"
@@ -172,48 +152,7 @@ const Dashboard: React.FC = () => {
           </>
         )}
         
-        {/* 역할별 추가 카드들 */}
-        {userProfile?.role === 'operations' && (
-          <>
-            <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-              <StatCard
-                title="내 요청"
-                value={stats.myRequests || 0}
-                icon={<PendingIcon />}
-                color="#2e7d32"
-                loading={stats.loading}
-              />
-            </Box>
-            {(stats.urgentRequests || 0) > 0 && (
-              <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-                <StatCard
-                  title="긴급 요청"
-                  value={stats.urgentRequests || 0}
-                  icon={<WarningIcon />}
-                  color="#d32f2f"
-                  loading={stats.loading}
-                />
-              </Box>
-            )}
-          </>
-        )}
-
-        {userProfile?.role === 'logistics' && (
-          <>
-            {(stats.overdueRequests || 0) > 0 && (
-              <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
-                <StatCard
-                  title="지연 요청"
-                  value={stats.overdueRequests || 0}
-                  icon={<WarningIcon />}
-                  color="#d32f2f"
-                  loading={stats.loading}
-                />
-              </Box>
-            )}
-          </>
-        )}
-
+        {/* 역할별 추가 카드들 - 운영담당자 카드 제거 */}
         {userProfile?.role === 'admin' && (
           <>
             <Box sx={{ flex: '1 1 250px', minWidth: 250 }}>
@@ -239,29 +178,38 @@ const Dashboard: React.FC = () => {
       </Box>
 
       {/* 탭 네비게이션 */}
-      <Paper sx={{ mb: 3 }}>
-        <Tabs 
-          value={tabValue} 
-          onChange={handleTabChange}
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab 
-            label="업무 현황" 
-            icon={<PendingIcon />}
-            iconPosition="start"
-          />
-          <Tab 
-            label="데이터 분석" 
-            icon={<ChartIcon />}
-            iconPosition="start"
-          />
-        </Tabs>
+      <Paper sx={{ mb: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Tabs 
+            value={tabValue} 
+            onChange={handleTabChange}
+            sx={{ borderBottom: 1, borderColor: 'divider', flex: 1 }}
+          >
+            <Tab 
+              label="업무 현황" 
+              icon={<PendingIcon />}
+              iconPosition="start"
+            />
+            <Tab 
+              label="데이터 분석" 
+              icon={<ChartIcon />}
+              iconPosition="start"
+            />
+          </Tabs>
+          <Box sx={{ pr: 2 }}>
+            <Tooltip title="새로고침">
+              <IconButton onClick={handleRefresh} disabled={stats.loading} size="small">
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
       </Paper>
 
       {/* 탭 컨텐츠 */}
       <TabPanel value={tabValue} index={0}>
         {/* 역할별 맞춤 대시보드 */}
-        <Box sx={{ mb: 3 }}>
+        <Box>
           {userProfile?.role === 'operations' && (
             <OperationsDashboard
               myRequests={stats.myRequests || 0}
@@ -269,6 +217,15 @@ const Dashboard: React.FC = () => {
               recentRequests={stats.recentRequests || []}
               loading={stats.loading}
               userId={currentUser?.uid}
+              monthlyRequests={stats.monthlyRequests || 0}
+              avgCompletionTime={stats.avgCompletionTime || 0}
+              requestAccuracy={stats.requestAccuracy || 0}
+              awaitingConfirmation={stats.awaitingConfirmation || 0}
+              inProgress={stats.inProgress || 0}
+              completed={stats.completed || 0}
+              operationsWaiting={stats.operationsWaiting || 0}
+              operationsPoCompleted={stats.operationsPoCompleted || 0}
+              operationsWarehouseReceived={stats.operationsWarehouseReceived || 0}
             />
           )}
 
@@ -279,9 +236,13 @@ const Dashboard: React.FC = () => {
               activeRequests={stats.activeRequests}
               loading={stats.loading}
               userId={currentUser?.uid}
-              monthlyCompleted={stats.todayCompleted || 0}
-              monthlyDispatched={stats.weeklyDispatched || 0}
+              monthlyCompleted={stats.monthlyCompleted || 0}
+              monthlyDispatched={stats.monthlyDispatched || 0}
               avgProcessingTime={stats.avgProcessingTime || 2.3}
+              operationsSubmitted={stats.operationsSubmitted || 0}
+              poCompleted={stats.poCompleted || 0}
+              warehouseReceived={stats.warehouseReceived || 0}
+              branchDispatched={stats.branchDispatched || 0}
             />
           )}
 
@@ -292,44 +253,32 @@ const Dashboard: React.FC = () => {
               totalBranches={stats.totalBranches}
               loading={stats.loading}
               userId={currentUser?.uid}
+              operationsWaiting={stats.operationsSubmitted || 0}
+              poCompleted={stats.poCompleted || 0}
+              warehouseReceived={stats.warehouseReceived || 0}
+              branchDispatched={stats.branchDispatched || 0}
+              completed={stats.completed || 0}
             />
           )}
         </Box>
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
-        {/* 차트 대시보드 */}
+        {/* 역할별 맞춤 차트 대시보드 */}
         <ChartDashboard
+          userRole={userProfile?.role}
           monthlyTrend={chartData.monthlyTrend}
           categoryDistribution={chartData.categoryDistribution}
           processingTime={chartData.processingTime}
           branchRequests={chartData.branchRequests}
           statusDistribution={chartData.statusDistribution}
+          supplierPerformance={chartData.supplierPerformance}
+          quantityAccuracy={chartData.quantityAccuracy}
+          systemActivity={chartData.systemActivity}
+          bottleneckAnalysis={chartData.bottleneckAnalysis}
           loading={chartData.loading}
         />
       </TabPanel>
-
-      {/* 역할별 안내 메시지 */}
-      <Paper sx={{ p: 3, borderRadius: 2, background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-          💡 시작하기
-        </Typography>
-        {userProfile?.role === 'admin' && (
-          <Typography variant="body2" color="text.secondary">
-            관리자로서 사용자 관리와 지점 관리 메뉴에서 시스템 설정을 시작하세요.
-          </Typography>
-        )}
-        {userProfile?.role === 'operations' && (
-          <Typography variant="body2" color="text.secondary">
-            부품 관리 메뉴에서 신규 부품을 등록하고 구매 요청을 생성하세요.
-          </Typography>
-        )}
-        {userProfile?.role === 'logistics' && (
-          <Typography variant="body2" color="text.secondary">
-            구매 요청 목록에서 처리 대상 요청들을 확인하세요.
-          </Typography>
-        )}
-      </Paper>
     </Box>
   );
 };
